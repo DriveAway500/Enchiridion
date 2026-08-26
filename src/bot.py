@@ -7,7 +7,11 @@ bot = commands.Bot(command_prefix="", intents=intents)
 @bot.event
 async def setup_hook():
     try:
-        await bot.load_extension("cogs.ping")
+        await bot.load_extension("cogs.ping_cog")
+        await bot.load_extension("cogs.exploit_cog")
+        await bot.load_extension("cogs.cve_cog")
+        await bot.load_extension("cogs.zeroday_cog")
+
     except Exception as e:
         print(f"SETUP HOOK ERROR: {e}")
 

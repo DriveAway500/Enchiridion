@@ -5,7 +5,7 @@ from typing import Any, AsyncGenerator
 
 import httpx
 
-from exceptions import APIError, NotFoundError
+from .exceptions import APIError, NotFoundError
 
 BASE_URL = "http://127.0.0.1:3000"
 

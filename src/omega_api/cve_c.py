@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from httpx_client import request_json
+from .httpx_client import request_json
 
 
 async def get_cve(cve_id: str):
