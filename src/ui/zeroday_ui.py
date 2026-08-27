@@ -2,7 +2,7 @@ import io
 import discord
 from discord import ui
 
-from omega_api import get_exploit, search_exploits
+from omega_api import get_zeroday_exploit, search_zeroday_exploits
 
 PAGE_SIZE = 5
 
@@ -20,7 +20,7 @@ class ExploitButton(ui.Button):
     async def callback(self, interaction):
         await interaction.response.defer()
 
-        data = await get_exploit(self.exploit_id)
+        data = await get_zeroday_exploit(self.exploit_id)
         if not data or "code" not in data:
             await interaction.followup.send(
                 "❌ Não foi possível carregar o código deste exploit.",
@@ -77,48 +77,48 @@ class ExploitButton(ui.Button):
         panel_view.active_code_message = msg
 
 
-class ExploitPanel(ui.LayoutView):
+class ZeroDayPanel(ui.LayoutView):
     def __init__(self, query, initial_results, current_page=1):
         super().__init__(timeout=180)
         self.query = query
         self.current_page = current_page
         self.active_code_message = None
-        self.message = None  # Armazena a mensagem associada
+        self.message = None
         self.build_ui(initial_results)
 
     async def on_timeout(self):
-            def disable_all(items):
-                for item in items:
-                    if hasattr(item, "disabled"):
-                        item.disabled = True
-                    if hasattr(item, "children"):
-                        disable_all(item.children)
+        def disable_all(items):
+            for item in items:
+                if hasattr(item, "disabled"):
+                    item.disabled = True
+                if hasattr(item, "children"):
+                    disable_all(item.children)
 
-            disable_all(self.children)
+        disable_all(self.children)
 
-            if self.message:
-                try:
-                    await self.message.edit(view=self)
-                except (discord.NotFound, discord.HTTPException):
-                    pass
+        if self.message:
+            try:
+                await self.message.edit(view=self)
+            except (discord.NotFound, discord.HTTPException):
+                pass
 
     def build_ui(self, exploits):
         self.clear_items()
 
         for exploit in exploits:
-            cves = exploit.get("cves")
+            cves = exploit.get("cve")
             cves_line = f"**CVEs:** `{', '.join(cves)}`\n" if cves else ""
 
             container = ui.Container()
             container.add_item(
-                ui.TextDisplay(f"**{exploit['description']}**")
+                ui.TextDisplay(f"**{exploit.get('title', '')}**")
             )
 
             details_text = (
-                f"**Categoria:** `{exploit['type']}`\n"
-                f"**Plataforma:** `{exploit['platform']}`\n"
-                f"**Data:** {exploit['date']}\n"
-                f"**Autor:** {exploit['author']}\n"
+                f"**Categoria:** `{exploit.get('category', 'N/A')}`\n"
+                f"**Plataforma:** `{exploit.get('platform', 'N/A')}`\n"
+                f"**Data:** {exploit.get('date', 'N/A')}\n"
+                f"**Autor:** {exploit.get('author', 'N/A')}\n"
                 f"{cves_line}"
             )
             container.add_item(ui.TextDisplay(details_text))
@@ -126,8 +126,8 @@ class ExploitPanel(ui.LayoutView):
             btn_row = ui.ActionRow()
             btn_row.add_item(
                 ExploitButton(
-                    exploit_id=exploit["id"],
-                    title=exploit["description"],
+                    exploit_id=exploit["exploit_id"],
+                    title=exploit.get("title", ""),
                 )
             )
             container.add_item(btn_row)
@@ -176,7 +176,7 @@ class ExploitPanel(ui.LayoutView):
 
     async def update_page(self, interaction):
         await interaction.response.defer()
-        results = await search_exploits(
+        results = await search_zeroday_exploits(
             self.query, page=self.current_page, limit=PAGE_SIZE
         )
 

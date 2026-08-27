@@ -3,9 +3,12 @@ from __future__ import annotations
 from .httpx_client import request_json
 
 
-async def search_zeroday_exploits(query: str, limit: int = 50):
+async def search_zeroday_exploits(query: str, page: int = 1, limit: int = 5):
+    offset = (page - 1) * limit
     return await request_json(
-        "GET", "/zeroday/search", params={"q": query, "limit": limit}
+        "GET",
+        "/zeroday/search",
+        params={"q": query, "limit": limit, "offset": offset},
     )
 
 

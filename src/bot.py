@@ -19,8 +19,13 @@ async def setup_hook():
 async def on_ready():
     try:
         synced = await bot.tree.sync()
+
+        activity = discord.CustomActivity(name="Procurando Exploits...")
+        await bot.change_presence(status=discord.Status.online, activity=activity)
+
         print(f"SYNCHRONIZED {len(synced)} GLOBAL TREE COMMANDS.")
         print(f"BOT CONNECTED AS: {bot.user}")
+
     except Exception as e:
         print(f"ON READY ERROR: {e}")
 
