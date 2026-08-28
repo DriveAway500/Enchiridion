@@ -8,7 +8,7 @@ async def get_cve(cve_id):
 
 
 async def search_cves_by_package(
-    package_name, year, page=1, limit=5
+    package_name, year, severity, page=1, limit=5
 ):
     offset = (page - 1) * limit
     params = {
@@ -17,6 +17,10 @@ async def search_cves_by_package(
         "limit": limit,
         "offset": offset,
     }
+
+    if severity:
+        params["severity"] = getattr(severity, "value", severity)
+
     result = await request_json(
         "GET",
         "/cve/search/package",

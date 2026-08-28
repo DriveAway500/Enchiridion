@@ -3,6 +3,9 @@ import traceback
 import discord
 from discord import ui
 
+from omega_api import search_cves_by_package, get_cve
+from .cve_view import CVEPanel, CVEDetailView
+
 #==========================
 #MODAL FOR PACKAGE SEARCH
 #==========================
@@ -56,19 +59,39 @@ class CVEPackageSearchModal(ui.Modal, title='Pesquisar CVEs'):
     async def on_submit(self, interaction):
         await interaction.response.defer(ephemeral=True)
 
-        search_query = {
-            "package": self.package_name.component.value,
-            "score_range": self.score.component.values[0],
-            "year": self.year.component.values[0]
-        }
+        package = self.package_name.component.value
+        score_range = self.score.component.values[0]
+        selected_year = self.year.component.values[0]
 
-        # TODO: Chame seu método de busca passando 'search_query'
-        # exemplo: results = await seu_metodo_de_busca(search_query)
-
-        await interaction.followup.send(
-            f"Pesquisa iniciada para o pacote `{search_query['package']}` (Ano: {search_query['year']}, Score: {search_query['score_range']}).",
-            ephemeral=True
+        results = await search_cves_by_package(
+            package_name=package,
+            year=selected_year,
+            severity=score_range,
+            page=1,
+            limit=5,
         )
+
+        if not results:
+            await interaction.followup.send(
+                f"❌ Nenhum CVE encontrado para o pacote `{package}` em {selected_year} com severidade `{score_range}`.",
+                ephemeral=True,
+            )
+            return
+
+        panel_view = CVEPanel(
+            package_name=package,
+            year=selected_year,
+            severity=score_range,
+            initial_results=results,
+            current_page=1,
+        )
+
+        msg = await interaction.followup.send(
+            view=panel_view,
+            ephemeral=True,
+            wait=True,
+        )
+        panel_view.message = msg
 
     async def on_error(self, interaction, error):
         await interaction.response.send_message('Algo deu errado na consulta!', ephemeral=True)
@@ -103,13 +126,23 @@ class CVEIdSearchModal(ui.Modal, title="Pesquisar CVE"):
 
         await interaction.response.defer(ephemeral=True)
 
-        # TODO: Chame o método de busca passando o ID validado
-        # result = await get_cve(cve_code)
+        data = await get_cve(cve_code)
 
-        await interaction.followup.send(
-            f"Pesquisa iniciada para a CVE `{cve_code}`.",
+        if not data:
+            await interaction.followup.send(
+                f"❌ Nenhum registro encontrado para a CVE `{cve_code}`.",
+                ephemeral=True,
+            )
+            return
+
+        detail_view = CVEDetailView(cve_data=data)
+
+        msg = await interaction.followup.send(
+            view=detail_view,
             ephemeral=True,
+            wait=True,
         )
+        detail_view.message = msg
 
     async def on_error(self, interaction, error):
         await interaction.response.send_message(
