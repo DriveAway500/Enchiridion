@@ -41,6 +41,28 @@ class CVEPackageSearchModal(ui.Modal, title='Pesquisar CVEs'):
                 discord.SelectOption(label="2025", value="2025"),
                 discord.SelectOption(label="2024", value="2024"),
                 discord.SelectOption(label="2023", value="2023"),
+                discord.SelectOption(label="2022", value="2022"),
+                discord.SelectOption(label="2021", value="2021"),
+                discord.SelectOption(label="2020", value="2020"),
+                discord.SelectOption(label="2019", value="2019"),
+                discord.SelectOption(label="2018", value="2018"),
+                discord.SelectOption(label="2017", value="2017"),
+                discord.SelectOption(label="2016", value="2016"),
+                discord.SelectOption(label="2015", value="2015"),
+                discord.SelectOption(label="2014", value="2014"),
+                discord.SelectOption(label="2013", value="2013"),
+                discord.SelectOption(label="2012", value="2012"),
+                discord.SelectOption(label="2011", value="2011"),
+                discord.SelectOption(label="2010", value="2010"),
+                discord.SelectOption(label="2009", value="2009"),
+                discord.SelectOption(label="2008", value="2008"),
+                discord.SelectOption(label="2007", value="2007"),
+                discord.SelectOption(label="2006", value="2006"),
+                discord.SelectOption(label="2005", value="2005"),
+                discord.SelectOption(label="2004", value="2004"),
+                discord.SelectOption(label="2003", value="2003"),
+                discord.SelectOption(label="2002", value="2002"),
+
             ]
         )
     )
