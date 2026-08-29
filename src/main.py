@@ -8,4 +8,9 @@ base_path = Path(__file__).resolve().parent
 env_path = base_path.parent / '.env'
 load_dotenv(dotenv_path=env_path)
 
-enchiridion_run(os.getenv("DISCORD_TOKEN"))
+DEV=True
+
+if DEV:
+    enchiridion_run(os.getenv("DEV_TOKEN"))
+else:
+    enchiridion_run(os.getenv("DISCORD_TOKEN"))

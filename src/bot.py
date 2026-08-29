@@ -11,6 +11,7 @@ async def setup_hook():
         await bot.load_extension("cogs.exploit_cog")
         await bot.load_extension("cogs.cve_cog")
         await bot.load_extension("cogs.zeroday_cog")
+        await bot.load_extension("cogs.help_cog")
 
     except Exception as e:
         print(f"SETUP HOOK ERROR: {e}")
