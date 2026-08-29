@@ -112,10 +112,22 @@ class CVEButton(ui.Button):
             return
 
         detail_view = CVEDetailView(cve_data=data)
+
+        # Se já existir um painel enviado no container pai (CVEPanel), apenas edita
+        if self.view.detail_message:
+            try:
+                await self.view.detail_message.edit(view=detail_view)
+                detail_view.message = self.view.detail_message
+                return
+            except (discord.NotFound, discord.HTTPException):
+                # Caso a mensagem antiga tenha sido apagada, gera uma nova
+                self.view.detail_message = None
+
         msg = await interaction.followup.send(
-            view=detail_view, ephemeral=True, wait=True
+            view=detail_view, wait=True
         )
         detail_view.message = msg
+        self.view.detail_message = msg
 
 
 class CVEPanel(ui.LayoutView):
@@ -126,6 +138,7 @@ class CVEPanel(ui.LayoutView):
         self.severity = severity
         self.current_page = current_page
         self.message = None
+        self.detail_message = None  # Armazena a referência da mensagem de detalhes
         self.build_ui(initial_results)
 
     async def on_timeout(self):
@@ -143,6 +156,12 @@ class CVEPanel(ui.LayoutView):
                 await self.message.edit(view=self)
             except (discord.NotFound, discord.HTTPException):
                 pass
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception, item: ui.Item):
+        if interaction.response.is_done():
+            await interaction.followup.send("Algo deu errado ao atualizar o painel!", ephemeral=True)
+        else:
+            await interaction.response.send_message("Algo deu errado ao atualizar o painel!", ephemeral=True)
 
     def build_ui(self, cves):
         self.clear_items()
@@ -171,18 +190,36 @@ class CVEPanel(ui.LayoutView):
                 score_info = f"`{base_score}` (**{base_severity}**)"
 
             published = cve_data.get("published", "N/A").split("T")[0]
-            status = cve_data.get("vulnStatus", "N/A")
+
+            # Extraindo os nomes dos softwares prejudicados (limitando para evitar estouro)
+            affected_items = cve_data.get("affected", [])
+            products = []
+            for item in affected_items:
+                for data in item.get("affectedData", []):
+                    product = data.get("product")
+                    if product and product not in products:
+                        products.append(product)
+            
+            # Se houver muitos produtos, limita a 2 para não estourar a linha
+            if len(products) > 2:
+                software_names = f"{products[0]}, {products[1]}..."
+            elif products:
+                software_names = ", ".join(products)
+            else:
+                software_names = self.package_name.capitalize()
 
             container = ui.Container()
 
+            # Título focado apenas na CVE e nos softwares
             container.add_item(
-                ui.TextDisplay(f"📌 **{cve_id}** — Score: {score_info}")
+                ui.TextDisplay(f"**{cve_id}** — {software_names}")
             )
 
+            # Score movido para junto dos detalhes
             details_text = (
+                f"**Score:** {score_info}\n"
                 f"**Publicado em:** `{published}`\n"
-                f"**Status:** `{status}`\n"
-                f"**Descrição:** {desc_text[:250]}{'...' if len(desc_text) > 250 else ''}"
+                f"**Descrição:** {desc_text[:150]}{'...' if len(desc_text) > 150 else ''}"
             )
             container.add_item(ui.TextDisplay(details_text))
 

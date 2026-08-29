@@ -88,7 +88,6 @@ class CVEPackageSearchModal(ui.Modal, title='Pesquisar CVEs'):
 
         msg = await interaction.followup.send(
             view=panel_view,
-            ephemeral=True,
             wait=True,
         )
         panel_view.message = msg
@@ -139,7 +138,6 @@ class CVEIdSearchModal(ui.Modal, title="Pesquisar CVE"):
 
         msg = await interaction.followup.send(
             view=detail_view,
-            ephemeral=True,
             wait=True,
         )
         detail_view.message = msg
