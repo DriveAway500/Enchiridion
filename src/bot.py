@@ -1,8 +1,8 @@
 import discord
 from discord.ext import commands, tasks
 
-from database import FeedDatabase
-from feeds import process_feeds_once, CVEClassifier
+# from database import FeedDatabase
+# from feeds import process_feeds_once, CVEClassifier
 
 
 class EnchiridionBot(commands.Bot):
@@ -12,8 +12,8 @@ class EnchiridionBot(commands.Bot):
             command_prefix="__ENCHIRIDION_UNUSED_PREFIX_9f3a7c__",
             intents=intents
         )
-        self.database: FeedDatabase | None = None
-        self.classifier: CVEClassifier | None = None
+        # self.database: FeedDatabase | None = None
+        # self.classifier: CVEClassifier | None = None
 
     async def setup_hook(self):
         try:
@@ -21,37 +21,37 @@ class EnchiridionBot(commands.Bot):
             await self.load_extension("cogs.cve_cog")
             await self.load_extension("cogs.zeroday_cog")
             await self.load_extension("cogs.help_cog")
-            await self.load_extension("cogs.feed_cog")
+            #await self.load_extension("cogs.feed_cog")
 
             synced = await self.tree.sync()
             print(f"SYNCHRONIZED {len(synced)} GLOBAL TREE COMMANDS.")
 
-            self.database = FeedDatabase("feeds.db")
-            await self.database.init()
-            self.classifier = CVEClassifier(is_sent_checker=self.database.is_sent)
+            # self.database = FeedDatabase("feeds.db")
+            # await self.database.init()
+            # self.classifier = CVEClassifier(is_sent_checker=self.database.is_sent)
 
-            self.feed_task.start()
+            # self.feed_task.start()
         except Exception as e:
             print(f"SETUP HOOK ERROR: {e}")
 
-    @tasks.loop(seconds=300)
-    async def feed_task(self):
-        try:
-            await process_feeds_once(self, self.database, self.classifier)
-        except Exception as e:
-            print(f"ERRO NA TASK DE FEEDS: {e}")
+    # @tasks.loop(seconds=300)
+    # async def feed_task(self):
+    #     try:
+    #         await process_feeds_once(self, self.database, self.classifier)
+    #     except Exception as e:
+    #         print(f"ERRO NA TASK DE FEEDS: {e}")
 
-    @feed_task.before_loop
-    async def before_feed_task(self):
-        await self.wait_until_ready()
+    # @feed_task.before_loop
+    # async def before_feed_task(self):
+    #     await self.wait_until_ready()
 
-    @feed_task.error
-    async def feed_task_error(self, error: BaseException):
-        print(f"FEED TASK CRASHOU: {error}")
+    # @feed_task.error
+    # async def feed_task_error(self, error: BaseException):
+    #     print(f"FEED TASK CRASHOU: {error}")
 
-    async def close(self):
-        self.feed_task.cancel()
-        await super().close()
+    # async def close(self):
+    #     self.feed_task.cancel()
+    #     await super().close()
 
     async def on_ready(self):
         try:
