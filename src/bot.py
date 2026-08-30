@@ -21,6 +21,7 @@ class EnchiridionBot(commands.Bot):
             await self.load_extension("cogs.cve_cog")
             await self.load_extension("cogs.zeroday_cog")
             await self.load_extension("cogs.help_cog")
+            await self.load_extension("cogs.feed_cog")
 
             synced = await self.tree.sync()
             print(f"SYNCHRONIZED {len(synced)} GLOBAL TREE COMMANDS.")
