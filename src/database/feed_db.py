@@ -6,10 +6,8 @@ import aiosqlite
 
 DEFAULT_DB_PATH = "feeds.db"
 
-
 @dataclass
 class FeedSubscription:
-    """Representa uma inscrição de envio de feeds para um canal do Discord."""
     guild_id: int
     channel_id: int
     min_severity: float = 0.0
@@ -18,18 +16,6 @@ class FeedSubscription:
 
 
 class FeedDatabase:
-    """
-    Camada de persistência para o sistema de feeds de vulnerabilidades.
-
-    Mantém:
-      - Em quais servidores (guilds) e canais os feeds devem ser enviados;
-      - Qual severidade mínima é usada como filtro para cada canal
-        (`min_severity`), incluindo se itens de severidade desconhecida
-        (`allow_unknown`) devem ser enviados;
-      - Quais itens já foram enviados (para evitar duplicidade), exposto
-        através de `is_sent`, que pode ser passado diretamente como o
-        `is_sent_checker` esperado por `CVEClassifier`.
-    """
 
     def __init__(self, db_path: str = DEFAULT_DB_PATH):
         self.db_path = db_path
@@ -70,7 +56,6 @@ class FeedDatabase:
         allow_unknown: bool = True,
         crosspost_channel_id: int | None = None,
     ) -> None:
-        """Cria ou atualiza a inscrição de um canal para receber feeds."""
         async with self._lock, aiosqlite.connect(self.db_path) as db:
             await db.execute(
                 """
@@ -87,7 +72,6 @@ class FeedDatabase:
             await db.commit()
 
     async def remove_subscription(self, guild_id: int, channel_id: int) -> None:
-        """Remove a inscrição de um canal específico."""
         async with self._lock, aiosqlite.connect(self.db_path) as db:
             await db.execute(
                 "DELETE FROM subscriptions WHERE guild_id = ? AND channel_id = ?",
@@ -102,7 +86,6 @@ class FeedDatabase:
         min_severity: float,
         allow_unknown: bool | None = None,
     ) -> None:
-        """Atualiza apenas o filtro de severidade de uma inscrição existente."""
         async with self._lock, aiosqlite.connect(self.db_path) as db:
             if allow_unknown is None:
                 await db.execute(
@@ -121,7 +104,6 @@ class FeedDatabase:
             await db.commit()
 
     async def list_subscriptions(self) -> list[FeedSubscription]:
-        """Retorna todas as inscrições cadastradas (todos os servidores/canais)."""
         async with aiosqlite.connect(self.db_path) as db:
             db.row_factory = aiosqlite.Row
             async with db.execute(
@@ -144,7 +126,6 @@ class FeedDatabase:
         ]
 
     async def list_subscriptions_for_guild(self, guild_id: int) -> list[FeedSubscription]:
-        """Retorna apenas as inscrições de um servidor específico."""
         subs = await self.list_subscriptions()
         return [s for s in subs if s.guild_id == guild_id]
 
