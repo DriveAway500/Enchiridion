@@ -46,7 +46,6 @@ class FeedDatabase:
             )
             await db.commit()
 
-    # ---------- Assinaturas: servidor + canal + filtro de severidade ----------
 
     async def add_subscription(
         self,
@@ -128,8 +127,6 @@ class FeedDatabase:
     async def list_subscriptions_for_guild(self, guild_id: int) -> list[FeedSubscription]:
         subs = await self.list_subscriptions()
         return [s for s in subs if s.guild_id == guild_id]
-
-    # ---------- Itens já enviados (usado como is_sent_checker do CVEClassifier) ----------
 
     async def is_sent(self, item_id: str) -> bool:
         async with aiosqlite.connect(self.db_path) as db:
