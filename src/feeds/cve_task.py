@@ -3,8 +3,8 @@ import logging
 
 import discord
 
-from .cve_classifier import CVEClassifier, VulnerabilityData
-from .database import FeedDatabase, FeedSubscription
+from .cve_spider import CVEClassifier, VulnerabilityData
+from database import FeedDatabase, FeedSubscription
 
 logger = logging.getLogger(__name__)
 
