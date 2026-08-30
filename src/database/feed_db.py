@@ -1,10 +1,17 @@
 import asyncio
+import os
 import time
 from dataclasses import dataclass
 
 import aiosqlite
 
-DEFAULT_DB_PATH = "feeds.db"
+# Caminho absoluto, ancorado na pasta deste arquivo. Um caminho relativo tipo
+# "feeds.db" depende de qual diretório você está quando roda o bot (cwd),
+# então dois processos rodados de pastas diferentes acabam usando bancos
+# diferentes sem perceber - foi exatamente isso que causou o item "já enviado"
+# mesmo depois de apagar o arquivo.
+DEFAULT_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "feeds.db")
+
 
 @dataclass
 class FeedSubscription:
@@ -12,18 +19,20 @@ class FeedSubscription:
     channel_id: int
     min_severity: float = 0.0
     allow_unknown: bool = True
-    crosspost_channel_id: int | None = None
+    webhook_url: str | None = None
 
 
 class FeedDatabase:
 
-    def __init__(self, db_path: str = DEFAULT_DB_PATH):
+    def __init__(self, db_path=DEFAULT_DB_PATH):
         self.db_path = db_path
         self._lock = asyncio.Lock()
+        self._initialized = False
 
-    async def init(self) -> None:
-        """Cria as tabelas necessárias caso ainda não existam."""
-        async with aiosqlite.connect(self.db_path) as db:
+    async def _ensure_init(self):
+        if self._initialized:
+            return
+        async with self._lock, aiosqlite.connect(self.db_path) as db:
             await db.execute(
                 """
                 CREATE TABLE IF NOT EXISTS subscriptions (
@@ -31,11 +40,17 @@ class FeedDatabase:
                     channel_id INTEGER NOT NULL,
                     min_severity REAL NOT NULL DEFAULT 0.0,
                     allow_unknown INTEGER NOT NULL DEFAULT 1,
-                    crosspost_channel_id INTEGER,
+                    webhook_url TEXT,
                     PRIMARY KEY (guild_id, channel_id)
                 )
                 """
             )
+            # Migração simples para bancos criados antes da coluna webhook_url
+            # existir. Se a coluna já existe, o ALTER falha e ignoramos.
+            try:
+                await db.execute("ALTER TABLE subscriptions ADD COLUMN webhook_url TEXT")
+            except Exception:
+                pass
             await db.execute(
                 """
                 CREATE TABLE IF NOT EXISTS sent_items (
@@ -45,32 +60,35 @@ class FeedDatabase:
                 """
             )
             await db.commit()
-
+            self._initialized = True
+            print(f"[db] usando banco de dados em: {self.db_path}")
 
     async def add_subscription(
         self,
-        guild_id: int,
-        channel_id: int,
-        min_severity: float = 0.0,
-        allow_unknown: bool = True,
-        crosspost_channel_id: int | None = None,
-    ) -> None:
+        guild_id,
+        channel_id,
+        min_severity=0.0,
+        allow_unknown=True,
+        webhook_url=None,
+    ):
+        await self._ensure_init()
         async with self._lock, aiosqlite.connect(self.db_path) as db:
             await db.execute(
                 """
                 INSERT INTO subscriptions
-                    (guild_id, channel_id, min_severity, allow_unknown, crosspost_channel_id)
+                    (guild_id, channel_id, min_severity, allow_unknown, webhook_url)
                 VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT(guild_id, channel_id) DO UPDATE SET
                     min_severity=excluded.min_severity,
                     allow_unknown=excluded.allow_unknown,
-                    crosspost_channel_id=excluded.crosspost_channel_id
+                    webhook_url=excluded.webhook_url
                 """,
-                (guild_id, channel_id, min_severity, int(allow_unknown), crosspost_channel_id),
+                (guild_id, channel_id, min_severity, int(allow_unknown), webhook_url),
             )
             await db.commit()
 
-    async def remove_subscription(self, guild_id: int, channel_id: int) -> None:
+    async def remove_subscription(self, guild_id, channel_id):
+        await self._ensure_init()
         async with self._lock, aiosqlite.connect(self.db_path) as db:
             await db.execute(
                 "DELETE FROM subscriptions WHERE guild_id = ? AND channel_id = ?",
@@ -80,11 +98,12 @@ class FeedDatabase:
 
     async def update_severity_filter(
         self,
-        guild_id: int,
-        channel_id: int,
-        min_severity: float,
-        allow_unknown: bool | None = None,
-    ) -> None:
+        guild_id,
+        channel_id,
+        min_severity,
+        allow_unknown=None,
+    ):
+        await self._ensure_init()
         async with self._lock, aiosqlite.connect(self.db_path) as db:
             if allow_unknown is None:
                 await db.execute(
@@ -102,12 +121,13 @@ class FeedDatabase:
                 )
             await db.commit()
 
-    async def list_subscriptions(self) -> list[FeedSubscription]:
+    async def list_subscriptions(self):
+        await self._ensure_init()
         async with aiosqlite.connect(self.db_path) as db:
             db.row_factory = aiosqlite.Row
             async with db.execute(
                 """
-                SELECT guild_id, channel_id, min_severity, allow_unknown, crosspost_channel_id
+                SELECT guild_id, channel_id, min_severity, allow_unknown, webhook_url
                 FROM subscriptions
                 """
             ) as cursor:
@@ -119,16 +139,17 @@ class FeedDatabase:
                 channel_id=row["channel_id"],
                 min_severity=row["min_severity"],
                 allow_unknown=bool(row["allow_unknown"]),
-                crosspost_channel_id=row["crosspost_channel_id"],
+                webhook_url=row["webhook_url"],
             )
             for row in rows
         ]
 
-    async def list_subscriptions_for_guild(self, guild_id: int) -> list[FeedSubscription]:
+    async def list_subscriptions_for_guild(self, guild_id):
         subs = await self.list_subscriptions()
         return [s for s in subs if s.guild_id == guild_id]
 
-    async def is_sent(self, item_id: str) -> bool:
+    async def is_sent(self, item_id):
+        await self._ensure_init()
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute(
                 "SELECT 1 FROM sent_items WHERE item_id = ?", (item_id,)
@@ -136,10 +157,15 @@ class FeedDatabase:
                 row = await cursor.fetchone()
         return row is not None
 
-    async def mark_sent(self, item_id: str) -> None:
+    async def mark_sent(self, item_id):
+        await self._ensure_init()
         async with self._lock, aiosqlite.connect(self.db_path) as db:
             await db.execute(
                 "INSERT OR IGNORE INTO sent_items (item_id, sent_at) VALUES (?, ?)",
                 (item_id, int(time.time())),
             )
             await db.commit()
+
+
+# Instância única exportada
+db = FeedDatabase()

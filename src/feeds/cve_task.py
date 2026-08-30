@@ -1,142 +1,125 @@
 import asyncio
-import logging
+import traceback
 
 import discord
+from discord.ext import tasks
 
-from .cve_spider import CVEClassifier, VulnerabilityData
-from database import FeedDatabase, FeedSubscription
+from .cve_spider import CVEClassifier
+from database import db
 
-logger = logging.getLogger(__name__)
+MAX_CONCURRENT_SENDS = 20
 
 
-def _build_embed(item: VulnerabilityData) -> discord.Embed:
-    embed = discord.Embed(
+def _build_embed(item):
+    return discord.Embed(
         title=f"{item.severity_label} {item.title}"[:256],
         url=item.link,
         description=item.summary[:4000],
         color=discord.Color(int(item.color_hex.lstrip("#"), 16)),
     )
-    if item.severity_score >= 0:
-        embed.add_field(name="Severidade", value=f"{item.severity_score:.1f}")
-    else:
-        embed.add_field(name="Severidade", value="Desconhecida")
-    if item.thumbnail:
-        embed.set_thumbnail(url=item.thumbnail)
-    return embed
 
 
-def _matches_filter(item: VulnerabilityData, sub: FeedSubscription) -> bool:
-    """Verifica se o item passa no filtro de severidade configurado para a inscrição."""
+def _matches_filter(item, sub):
     if item.severity_score == -1.0:
         return sub.allow_unknown
     return item.severity_score >= sub.min_severity
 
 
-async def _resolve_channel(bot: discord.Client, channel_id: int) -> discord.abc.Messageable | None:
-    channel = bot.get_channel(channel_id)
-    if channel is not None:
-        return channel
-    try:
-        return await bot.fetch_channel(channel_id)
-    except discord.HTTPException:
-        return None
-
-
-async def _send_to_subscription(bot: discord.Client, sub: FeedSubscription, item: VulnerabilityData) -> None:
-    channel = await _resolve_channel(bot, sub.channel_id)
-    if channel is None:
-        logger.warning(
-            "Não foi possível acessar o canal %s no servidor %s", sub.channel_id, sub.guild_id
+async def _send_to_subscription(session, sub, item):
+    """Envia via webhook. Retorna (enviado_com_sucesso, webhook_sumiu)."""
+    if not sub.webhook_url:
+        print(
+            f"Canal {sub.channel_id} (servidor {sub.guild_id}) ainda não tem "
+            "webhook - peça para rodar /feeds registrar novamente."
         )
-        return
+        return False, False
 
+    webhook = discord.Webhook.from_url(sub.webhook_url, session=session)
     embed = _build_embed(item)
     try:
-        if isinstance(channel, discord.TextChannel):
-            thread = await channel.create_thread(
-                name=item.thread_name[:100],
-                type=discord.ChannelType.public_thread,
-            )
-            await thread.send(embed=embed)
-        else:
-            await channel.send(embed=embed)
-    except discord.HTTPException as e:
-        logger.error("Falha ao enviar item %s para canal %s: %s", item.id, sub.channel_id, e)
-        return
-
-    if item.should_crosspost and sub.crosspost_channel_id:
-        crosspost_channel = await _resolve_channel(bot, sub.crosspost_channel_id)
-        if crosspost_channel is not None:
-            try:
-                await crosspost_channel.send(embed=embed)
-            except discord.HTTPException as e:
-                logger.error("Falha ao crosspostar item %s: %s", item.id, e)
+        await asyncio.wait_for(webhook.send(embed=embed), timeout=10)
+        return True, False
+    except asyncio.TimeoutError:
+        print(f"Timeout ao enviar item {item.id} para canal {sub.channel_id}")
+        return False, False
+    except discord.NotFound:
+        print(f"Webhook do canal {sub.channel_id} (servidor {sub.guild_id}) não existe mais - removendo inscrição.")
+        return False, True
+    except discord.DiscordException as e:
+        print(f"Falha ao enviar item {item.id} para canal {sub.channel_id}: {e}")
+        return False, False
 
 
-async def process_feeds_once(bot: discord.Client, database: FeedDatabase, classifier: CVEClassifier) -> None:
+async def process_feeds_once(bot, classifier):
+    stats = {
+        "items_found": 0,
+        "subscriptions": 0,
+        "matched": 0,
+        "sent_ok": 0,
+        "sent_failed": 0,
+    }
+
     items = await classifier.fetch_and_classify()
+    stats["items_found"] = len(items)
+    print(f"[feeds] ciclo: {len(items)} item(ns) novo(s) encontrado(s) no total")
     if not items:
-        return
+        return stats
 
-    subscriptions = await database.list_subscriptions()
+    subscriptions = await db.list_subscriptions()
+    stats["subscriptions"] = len(subscriptions)
+    print(f"[feeds] ciclo: {len(subscriptions)} inscrição(ões) registrada(s) (em todos os servidores)")
+
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT_SENDS)
+
+    async def _send_with_limit(sub, item):
+        async with semaphore:
+            return await _send_to_subscription(bot.webhook_session, sub, item)
 
     for item in items:
         matching_subs = [s for s in subscriptions if _matches_filter(item, s)]
+        stats["matched"] += len(matching_subs)
+        print(
+            f"[feeds] item {item.id} ({item.severity_label}, score={item.severity_score}) "
+            f"-> {len(matching_subs)} canal(is) correspondente(s)"
+        )
 
         if not matching_subs:
-            # Nenhuma inscrição bate com esse item ainda — não marca como
-            # enviado, para que ele seja reavaliado nos próximos ciclos
-            # (ex: alguém pode registrar um canal compatível depois).
             continue
 
-        for sub in matching_subs:
-            await _send_to_subscription(bot, sub, item)
-            if item.should_crosspost:
-                classifier.register_crosspost()
+        resultados = await asyncio.gather(*(_send_with_limit(sub, item) for sub in matching_subs))
 
-        await database.mark_sent(item.id)
+        for sub, (ok, webhook_sumiu) in zip(matching_subs, resultados):
+            if ok:
+                stats["sent_ok"] += 1
+            else:
+                stats["sent_failed"] += 1
+                if webhook_sumiu:
+                    await db.remove_subscription(sub.guild_id, sub.channel_id)
+
+        await db.mark_sent(item.id)
+
+    return stats
 
 
-async def run_feed_task(
-    bot: discord.Client,
-    database: FeedDatabase,
-    classifier: CVEClassifier,
-    interval_seconds: int = 300,
-) -> None:
-    """
-    Loop assíncrono principal: verifica os feeds periodicamente e envia
-    as vulnerabilidades classificadas para os canais inscritos, respeitando
-    o filtro de severidade configurado em cada assinatura (guild + canal).
-    """
-    await bot.wait_until_ready()
+def setup_feed_task(bot, interval_seconds=300):
+    classifier = CVEClassifier(is_sent_checker=db.is_sent)
+    bot.feed_classifier = classifier
 
-    while not bot.is_closed():
+    @tasks.loop(seconds=interval_seconds)
+    async def feed_task():
         try:
-            await process_feeds_once(bot, database, classifier)
-        except Exception:
-            logger.exception("Erro ao processar o ciclo de feeds")
+            await process_feeds_once(bot, classifier)
+        except Exception as e:
+            print(f"Erro ao processar o ciclo de feeds: {e}")
+            traceback.print_exc()
 
-        await asyncio.sleep(interval_seconds)
+    @feed_task.before_loop
+    async def before_feed_task():
+        await bot.wait_until_ready()
 
+    @feed_task.error
+    async def feed_task_error(error):
+        print(f"FEED TASK CRASHOU: {error}")
+        traceback.print_exception(type(error), error, error.__traceback__)
 
-def start_feed_task(
-    bot: discord.Client,
-    database: FeedDatabase,
-    classifier: CVEClassifier,
-    interval_seconds: int = 300,
-) -> asyncio.Task:
-    """
-    Agenda a task de feeds no loop de eventos do bot (chamar em on_ready
-    ou em um setup_hook, por exemplo).
-
-    Exemplo de uso:
-        database = FeedDatabase("feeds.db")
-        await database.init()
-
-        classifier = CVEClassifier(is_sent_checker=database.is_sent)
-
-        start_feed_task(bot, database, classifier, interval_seconds=300)
-    """
-    return bot.loop.create_task(
-        run_feed_task(bot, database, classifier, interval_seconds=interval_seconds)
-    )
+    return feed_task

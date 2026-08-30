@@ -1,9 +1,7 @@
 import re
-import time
 import traceback
-from collections import deque
 from dataclasses import dataclass
-from typing import Callable, Awaitable
+
 import feedparser
 
 from .httpx_client import get_http_client
@@ -19,36 +17,25 @@ class VulnerabilityData:
     severity_label: str
     color_hex: str
     thumbnail: str | None = None
-    should_crosspost: bool = False
-    thread_name: str = ""
 
 
 class CVEClassifier:
-    def __init__(
-        self,
-        is_sent_checker: Callable[[str], Awaitable[bool]],
-        feeds: list[str] | None = None,
-        crosspost_min_severity: float = 9.0,
-        crosspost_limit_per_hour: int = 10,
-    ):
+    def __init__(self, is_sent_checker, feeds=None):
         """
         :param is_sent_checker: Função assíncrona que recebe o ID do item (str)
-                                e retorna True se ele já existir na database.
+                                 e retorna True se ele já existir na database.
         """
         self.is_sent_checker = is_sent_checker
         self.feeds = feeds or ["https://cvefeed.io/rssfeed/latest.atom"]
-        self.crosspost_min_severity = crosspost_min_severity
-        self.crosspost_limit_per_hour = crosspost_limit_per_hour
-        self._crosspost_timestamps = deque()
 
     @staticmethod
-    def clean_html(text: str) -> str:
+    def clean_html(text):
         if not text:
             return ""
         return re.sub(r"<.*?>", "", text).strip()
 
     @staticmethod
-    def extract_severity(data: str) -> float:
+    def extract_severity(data):
         if not data:
             return -1.0
         patterns = [
@@ -62,56 +49,47 @@ class CVEClassifier:
         return -1.0
 
     @staticmethod
-    def classify_severity(severity: float) -> tuple[str, str] | tuple[None, None]:
+    def classify_severity(severity):
+        # OBS: severidade 0.0 é um valor válido de CVSS (ex.: "informativo") e
+        # precisa cair no bucket LOW, não ser descartada. Por isso o LOW usa
+        # ">= 0.0" em vez de ">= 0.1", e o UNKNOWN (-1.0) é checado por último.
         if severity >= 9.0:
             return "[CRITICAL]", "#FF0000"
         elif severity >= 7.0:
             return "[HIGH]", "#FFA500"
         elif severity >= 4.0:
             return "[MEDIUM]", "#FFFF00"
-        elif severity >= 0.1:
+        elif severity >= 0.0:
             return "[LOW]", "#008000"
         elif severity == -1.0:
             return "[UNKNOWN]", "#5865F2"
         else:
             return None, None
 
-    def _check_crosspost_eligibility(self, severity: float) -> bool:
-        if severity < self.crosspost_min_severity:
-            return False
-
-        now = time.monotonic()
-        one_hour = 3600.0
-
-        while self._crosspost_timestamps and now - self._crosspost_timestamps[0] > one_hour:
-            self._crosspost_timestamps.popleft()
-
-        if len(self._crosspost_timestamps) >= self.crosspost_limit_per_hour:
-            return False
-
-        return True
-
-    def register_crosspost(self):
-        self._crosspost_timestamps.append(time.monotonic())
-
-    async def fetch_and_classify(self) -> list[VulnerabilityData]:
+    async def fetch_and_classify(self):
         classified_items = []
 
         async with get_http_client() as client:
             for url in self.feeds:
                 try:
+                    print(f"[feeds] buscando {url}")
                     response = await client.get(url)
                     if response.status_code != 200:
-                        print(f"Erro ao acessar {url}: Status {response.status_code}")
+                        print(f"[feeds] erro ao acessar {url}: status {response.status_code}")
                         continue
 
                     body = response.text
                     feed = feedparser.parse(body)
+                    print(f"[feeds] {url}: {len(feed.entries)} entrada(s) no feed")
+
+                    ja_enviados = 0
+                    descartados_sem_label = 0
 
                     for entry in reversed(feed.entries):
                         item_id = getattr(entry, "id", entry.link)
 
                         if await self.is_sent_checker(item_id):
+                            ja_enviados += 1
                             continue
 
                         title = entry.title
@@ -123,16 +101,12 @@ class CVEClassifier:
                         label, color = self.classify_severity(severity_score)
 
                         if label is None:
+                            descartados_sem_label += 1
                             continue
-
-                        cve_match = re.search(r"CVE-\d{4}-\d+", title, re.IGNORECASE)
-                        thread_name = f"{label} {cve_match.group(0)}" if cve_match else title[:100]
 
                         thumbnail = None
                         if "media_thumbnail" in entry:
                             thumbnail = entry.media_thumbnail[0]["url"]
-
-                        should_crosspost = self._check_crosspost_eligibility(severity_score)
 
                         item_data = VulnerabilityData(
                             id=item_id,
@@ -143,14 +117,18 @@ class CVEClassifier:
                             severity_label=label,
                             color_hex=color,
                             thumbnail=thumbnail,
-                            should_crosspost=should_crosspost,
-                            thread_name=thread_name,
                         )
 
                         classified_items.append(item_data)
 
+                    print(
+                        f"[feeds] {url}: {ja_enviados} já enviado(s) antes, "
+                        f"{descartados_sem_label} sem severidade classificável, "
+                        f"{len(classified_items)} novo(s) pronto(s) para envio"
+                    )
+
                 except Exception as e:
-                    print(f"Erro ao processar feed {url}: {e}")
+                    print(f"[feeds] erro ao processar feed {url}: {e}")
                     traceback.print_exc()
 
         return classified_items

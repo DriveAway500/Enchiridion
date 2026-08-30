@@ -1,2 +1,1 @@
-from .cve_spider import CVEClassifier, VulnerabilityData
-from .cve_task import process_feeds_once
+from .cve_task import setup_feed_task, process_feeds_once

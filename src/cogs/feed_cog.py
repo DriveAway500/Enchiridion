@@ -2,9 +2,9 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-# Opções de severidade mostradas no slash command.
-# O valor numérico é o "min_severity" salvo na FeedDatabase e usado
-# pelo feed_task para filtrar o que é enviado em cada canal.
+from database import db
+from feeds import process_feeds_once
+
 SEVERITY_CHOICES = [
     app_commands.Choice(name="Crítico (9.0+)", value=9.0),
     app_commands.Choice(name="Alto (7.0+)", value=7.0),
@@ -17,13 +17,13 @@ SEVERITY_CHOICES = [
 class FeedConfigCog(commands.Cog):
     """Comandos para configurar em quais canais os feeds de vulnerabilidades são enviados."""
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot):
         self.bot = bot
 
     feeds = app_commands.Group(
         name="feeds",
         description="Configura o envio de feeds de vulnerabilidades neste servidor.",
-        default_permissions=discord.Permissions(manage_guild=True),
+        default_permissions=discord.Permissions(manage_guild=True, manage_webhooks=True),
         guild_only=True,
     )
 
@@ -32,29 +32,47 @@ class FeedConfigCog(commands.Cog):
         canal="Canal onde os feeds serão enviados.",
         severidade="Severidade mínima que será enviada para este canal.",
         incluir_desconhecidas="Enviar também itens sem severidade identificada?",
-        canal_crosspost="Canal opcional para republicar automaticamente vulnerabilidades críticas.",
     )
     @app_commands.choices(severidade=SEVERITY_CHOICES)
+    @app_commands.guild_only()
     async def registrar(
         self,
         interaction: discord.Interaction,
         canal: discord.TextChannel,
         severidade: app_commands.Choice[float],
         incluir_desconhecidas: bool = True,
-        canal_crosspost: discord.TextChannel | None = None,
     ):
-        await self.bot.database.add_subscription(
+        try:
+            avatar_bytes = await self.bot.user.display_avatar.read()
+            webhook = await canal.create_webhook(
+                name="Enchiridion",
+                avatar=avatar_bytes,
+                reason="Registro de feed de vulnerabilidades via /feeds registrar",
+            )
+        except discord.Forbidden:
+            await interaction.response.send_message(
+                f"⚠️ Não tenho permissão de **Gerenciar Webhooks** em {canal.mention}. "
+                "Dê essa permissão ao bot nesse canal e tente novamente.",
+                ephemeral=True,
+            )
+            return
+        except discord.HTTPException as e:
+            await interaction.response.send_message(
+                f"⚠️ Não consegui criar o webhook em {canal.mention}: {e}",
+                ephemeral=True,
+            )
+            return
+
+        await db.add_subscription(
             guild_id=interaction.guild_id,
             channel_id=canal.id,
             min_severity=severidade.value,
             allow_unknown=incluir_desconhecidas,
-            crosspost_channel_id=canal_crosspost.id if canal_crosspost else None,
+            webhook_url=webhook.url,
         )
 
         await interaction.response.send_message(
-            f"✅ Feeds registrados em {canal.mention} com severidade mínima **{severidade.name}**."
-            + (f"\nCrosspost habilitado em {canal_crosspost.mention} para itens críticos."
-               if canal_crosspost else ""),
+            f"✅ Feeds registrados em {canal.mention} com severidade mínima **{severidade.name}**.",
             ephemeral=True,
         )
 
@@ -65,6 +83,7 @@ class FeedConfigCog(commands.Cog):
         incluir_desconhecidas="Enviar também itens sem severidade identificada?",
     )
     @app_commands.choices(severidade=SEVERITY_CHOICES)
+    @app_commands.guild_only()
     async def severidade(
         self,
         interaction: discord.Interaction,
@@ -72,7 +91,7 @@ class FeedConfigCog(commands.Cog):
         severidade: app_commands.Choice[float],
         incluir_desconhecidas: bool = True,
     ):
-        subs = await self.bot.database.list_subscriptions_for_guild(interaction.guild_id)
+        subs = await db.list_subscriptions_for_guild(interaction.guild_id)
         if not any(s.channel_id == canal.id for s in subs):
             await interaction.response.send_message(
                 f"⚠️ {canal.mention} não está registrado. Use `/feeds registrar` primeiro.",
@@ -80,7 +99,7 @@ class FeedConfigCog(commands.Cog):
             )
             return
 
-        await self.bot.database.update_severity_filter(
+        await db.update_severity_filter(
             guild_id=interaction.guild_id,
             channel_id=canal.id,
             min_severity=severidade.value,
@@ -94,8 +113,19 @@ class FeedConfigCog(commands.Cog):
 
     @feeds.command(name="remover", description="Remove o registro de feeds de um canal.")
     @app_commands.describe(canal="Canal que deixará de receber feeds.")
+    @app_commands.guild_only()
     async def remover(self, interaction: discord.Interaction, canal: discord.TextChannel):
-        await self.bot.database.remove_subscription(
+        subs = await db.list_subscriptions_for_guild(interaction.guild_id)
+        sub = next((s for s in subs if s.channel_id == canal.id), None)
+
+        if sub and sub.webhook_url:
+            try:
+                webhook = discord.Webhook.from_url(sub.webhook_url, session=self.bot.webhook_session)
+                await webhook.delete(reason="Removido via /feeds remover")
+            except discord.HTTPException:
+                pass  # Já não existe mais - sem problema.
+
+        await db.remove_subscription(
             guild_id=interaction.guild_id,
             channel_id=canal.id,
         )
@@ -105,8 +135,9 @@ class FeedConfigCog(commands.Cog):
         )
 
     @feeds.command(name="listar", description="Lista os canais deste servidor registrados para receber feeds.")
+    @app_commands.guild_only()
     async def listar(self, interaction: discord.Interaction):
-        subs = await self.bot.database.list_subscriptions_for_guild(interaction.guild_id)
+        subs = await db.list_subscriptions_for_guild(interaction.guild_id)
 
         if not subs:
             await interaction.response.send_message(
@@ -120,14 +151,57 @@ class FeedConfigCog(commands.Cog):
             nome_canal = canal.mention if canal else f"`{sub.channel_id}` (canal não encontrado)"
             desconhecidas = "sim" if sub.allow_unknown else "não"
             linha = f"{nome_canal} — severidade mínima **{sub.min_severity}** (inclui desconhecidas: {desconhecidas})"
-            if sub.crosspost_channel_id:
-                crosspost_canal = interaction.guild.get_channel(sub.crosspost_channel_id)
-                nome_crosspost = crosspost_canal.mention if crosspost_canal else f"`{sub.crosspost_channel_id}`"
-                linha += f" — crosspost em {nome_crosspost}"
             linhas.append(linha)
 
-        await interaction.response.send_message("\n".join(linhas), ephemeral=True)
+        primeiro_bloco = True
+        bloco_atual = ""
+        for linha in linhas:
+            candidato = f"{bloco_atual}\n{linha}" if bloco_atual else linha
+            if len(candidato) > 1900:
+                await self._enviar_bloco(interaction, bloco_atual, primeiro_bloco)
+                primeiro_bloco = False
+                bloco_atual = linha
+            else:
+                bloco_atual = candidato
+
+        if bloco_atual:
+            await self._enviar_bloco(interaction, bloco_atual, primeiro_bloco)
+
+    # @feeds.command(name="testar", description="Roda o ciclo de busca/envio de feeds agora mesmo (para debug).")
+    # @app_commands.guild_only()
+    # async def testar(self, interaction: discord.Interaction):
+    #     await interaction.response.defer(ephemeral=True)
+    #     stats = await process_feeds_once(self.bot, self.bot.feed_classifier)
+
+    #     if stats["items_found"] == 0:
+    #         texto = "🔍 Ciclo executado: nenhum item novo no feed (tudo já havia sido processado antes)."
+    #     elif stats["subscriptions"] == 0:
+    #         texto = (
+    #             f"🔍 Ciclo executado: {stats['items_found']} item(ns) novo(s) encontrado(s), "
+    #             "mas **nenhum canal está registrado** neste momento. Use `/feeds registrar` primeiro."
+    #         )
+    #     elif stats["matched"] == 0:
+    #         texto = (
+    #             f"🔍 Ciclo executado: {stats['items_found']} item(ns) novo(s), "
+    #             f"{stats['subscriptions']} canal(is) registrado(s), mas nenhum item bateu com o "
+    #             "filtro de severidade configurado nesses canais."
+    #         )
+    #     else:
+    #         texto = (
+    #             f"✅ Ciclo executado: {stats['items_found']} item(ns) novo(s), "
+    #             f"{stats['sent_ok']} mensagem(ns) enviada(s) com sucesso"
+    #             + (f", {stats['sent_failed']} falharam (veja o console)." if stats["sent_failed"] else ".")
+    #         )
+
+    #     await interaction.followup.send(texto, ephemeral=True)
+
+    # @staticmethod
+    # async def _enviar_bloco(interaction, texto, primeiro_bloco):
+    #     if primeiro_bloco:
+    #         await interaction.response.send_message(texto, ephemeral=True)
+    #     else:
+    #         await interaction.followup.send(texto, ephemeral=True)
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot):
     await bot.add_cog(FeedConfigCog(bot))

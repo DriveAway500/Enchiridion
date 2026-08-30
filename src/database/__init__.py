@@ -1,1 +1,1 @@
-from .feed_db import FeedDatabase, FeedSubscription
+from .feed_db import db
