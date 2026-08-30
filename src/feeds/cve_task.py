@@ -74,11 +74,6 @@ async def _send_to_subscription(bot: discord.Client, sub: FeedSubscription, item
 
 
 async def process_feeds_once(bot: discord.Client, database: FeedDatabase, classifier: CVEClassifier) -> None:
-    """
-    Executa um ciclo único de coleta e envio: busca os itens novos,
-    filtra por severidade para cada inscrição e envia/crossposta
-    conforme configurado no banco de dados.
-    """
     items = await classifier.fetch_and_classify()
     if not items:
         return
@@ -88,13 +83,17 @@ async def process_feeds_once(bot: discord.Client, database: FeedDatabase, classi
     for item in items:
         matching_subs = [s for s in subscriptions if _matches_filter(item, s)]
 
+        if not matching_subs:
+            # Nenhuma inscrição bate com esse item ainda — não marca como
+            # enviado, para que ele seja reavaliado nos próximos ciclos
+            # (ex: alguém pode registrar um canal compatível depois).
+            continue
+
         for sub in matching_subs:
             await _send_to_subscription(bot, sub, item)
             if item.should_crosspost:
                 classifier.register_crosspost()
 
-        # Marca como enviado mesmo que não haja inscrições correspondentes,
-        # para não reprocessar o mesmo item em ciclos futuros.
         await database.mark_sent(item.id)
 
 
