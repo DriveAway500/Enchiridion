@@ -1,0 +1,11 @@
+{
+  "exploitdb": {
+    "documentation": "Busca exploits en Exploit Database. Use este comando para encontrar exploits públicos relacionados con una vulnerabilidad, producto, versión o identificador CVE."
+  },
+  "cve": {
+    "documentation": "Busca información sobre vulnerabilidades identificadas por CVE o paquete. Puede utilizar descripciones complejas al buscar por paquete, incluyendo versiones, vulnerabilidades, etc. Devuelve detalles como descripción, severidad, puntuación CVSS, productos afectados y otra información disponible."
+  },
+  "zerodaytoday": {
+    "documentation": "Busca vulnerabilidades y exploits asociados a 0daytoday. Use este comando para consultar vulnerabilidades antiguas provenientes de una base de datos con vulnerabilidades desde 2004."
+  }
+}
