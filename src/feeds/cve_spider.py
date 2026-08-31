@@ -56,7 +56,7 @@ class CVEClassifier:
             return "[HIGH]", "#FFA500"
         elif severity >= 4.0:
             return "[MEDIUM]", "#FFFF00"
-        elif severity >= 0.0:
+        elif severity > 0.0:
             return "[LOW]", "#008000"
         elif severity == -1.0:
             return "[UNKNOWN]", "#5865F2"
