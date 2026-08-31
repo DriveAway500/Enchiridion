@@ -23,28 +23,28 @@ class HelpCog(commands.Cog):
         ]
     )
     async def help(self, interaction: discord.Interaction, opcao: app_commands.Choice[str]):
-        lang = "en_US"
+        lang = "EN"
         if interaction.guild_id:
             lang = await lang_db.get_language(interaction.guild_id, default="EN")
 
         data = await load_command_translation("help", lang)
 
-        ferramenta_info = data.get(opcao.value)
+        tool_info = data.get(opcao.value)
 
-        if not ferramenta_info:
-            mensagem_erro = (
+        if not tool_info:
+            error_message = (
                 "No information found for the selected option."
                 if lang == "EN"
                 else "Nenhuma informação encontrada para a opção selecionada."
             )
-            await interaction.response.send_message(mensagem_erro, ephemeral=True)
+            await interaction.response.send_message(error_message, ephemeral=True)
             return
 
-        descricao = ferramenta_info["documentation"]
+        description = tool_info["documentation"]
 
         embed = discord.Embed(
             title=f"/{opcao.name}",
-            description=descricao,
+            description=description,
             color=discord.Color.blue(),
         )
 

@@ -3,3 +3,4 @@ dotenv
 httpx
 aiosqlite
 feedparser
+aiofiles
