@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import aiosqlite
 
 DEFAULT_DB_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "guild_settings.db"
+    os.path.dirname(os.path.abspath(__file__)), "language.db"
 )
 
 
