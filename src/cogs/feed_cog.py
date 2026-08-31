@@ -121,7 +121,7 @@ class FeedConfigCog(commands.Cog):
                 webhook = discord.Webhook.from_url(sub.webhook_url, session=self.bot.webhook_session)
                 await webhook.delete(reason="Removido via /feeds remover")
             except discord.HTTPException:
-                pass  # Já não existe mais - sem problema.
+                pass 
 
         await feed_db.remove_subscription(
             guild_id=interaction.guild_id,
