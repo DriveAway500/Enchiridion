@@ -1,0 +1,52 @@
+{
+    "pkg_modal": {
+        "title": "Search CVEs",
+        "lbl_score": "CVSS Score",
+        "desc_score": "Filter by severity / score",
+        "ph_score": "Select score range",
+        "opt_low": "Low (0.1 - 3.9)",
+        "opt_medium": "Medium (4.0 - 6.9)",
+        "opt_high": "High (7.0 - 8.9)",
+        "opt_critical": "Critical (9.0 - 10.0)",
+        "lbl_year": "Time Range",
+        "desc_year": "Choose publication year",
+        "ph_year": "Select year",
+        "lbl_package": "Package or Term",
+        "desc_package": "Enter package name or keyword",
+        "ph_package": "e.g., linux, openssl, sudo...",
+        "not_found": "No CVE found for package `{package}` in {year} with severity `{severity}`.",
+        "error": "Something went wrong with the query!"
+    },
+    "id_modal": {
+        "title": "Search CVE",
+        "lbl_id": "CVE ID",
+        "ph_id": "e.g., CVE-2021-44228",
+        "invalid_format": "Invalid CVE format! Use the format `CVE-YYYY-NNNN` (e.g., `CVE-2021-44228`).",
+        "not_found": "No record found for CVE `{cve_code}`.",
+        "error": "Something went wrong with the query!"
+    },
+    "detail_view": {
+        "details_title": "🛡️ **Details for {cve_id}**",
+        "status": "Status",
+        "published": "Published on",
+        "updated": "Updated",
+        "score": "Score",
+        "vector": "Vector",
+        "description": "Description",
+        "no_description": "No description available.",
+        "ref_single": "Source Link",
+        "ref_multiple": "Source Link {idx}",
+        "load_error": "Could not load details for `{cve_id}`."
+    },
+    "panel_view": {
+        "btn_details": "View Details",
+        "score": "Score",
+        "published": "Published on",
+        "description": "Description",
+        "no_description": "No description available.",
+        "btn_prev": "◀ Previous",
+        "btn_next": "Next ▶",
+        "page_indicator": "Page {page}",
+        "error_update": "Something went wrong while updating the panel!"
+    }
+}
