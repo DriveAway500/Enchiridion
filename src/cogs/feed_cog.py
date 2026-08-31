@@ -9,13 +9,11 @@ SEVERITY_CHOICES = [
     app_commands.Choice(name="Crítico (9.0+)", value=9.0),
     app_commands.Choice(name="Alto (7.0+)", value=7.0),
     app_commands.Choice(name="Médio (4.0+)", value=4.0),
-    #app_commands.Choice(name="Baixo (qualquer severidade conhecida)", value=0.1),
     app_commands.Choice(name="Tudo (inclui severidade desconhecida)", value=0.0),
 ]
 
 
 class FeedConfigCog(commands.Cog):
-    """Comandos para configurar em quais canais os feeds de vulnerabilidades são enviados."""
 
     def __init__(self, bot):
         self.bot = bot
@@ -63,7 +61,7 @@ class FeedConfigCog(commands.Cog):
             )
             return
 
-        await db.add_subscription(
+        await feed_db.add_subscription(
             guild_id=interaction.guild_id,
             channel_id=canal.id,
             min_severity=severidade.value,
@@ -91,7 +89,7 @@ class FeedConfigCog(commands.Cog):
         severidade: app_commands.Choice[float],
         incluir_desconhecidas: bool = True,
     ):
-        subs = await db.list_subscriptions_for_guild(interaction.guild_id)
+        subs = await feed_db.list_subscriptions_for_guild(interaction.guild_id)
         if not any(s.channel_id == canal.id for s in subs):
             await interaction.response.send_message(
                 f"⚠️ {canal.mention} não está registrado. Use `/feeds registrar` primeiro.",
@@ -99,7 +97,7 @@ class FeedConfigCog(commands.Cog):
             )
             return
 
-        await db.update_severity_filter(
+        await feed_db.update_severity_filter(
             guild_id=interaction.guild_id,
             channel_id=canal.id,
             min_severity=severidade.value,
@@ -115,7 +113,7 @@ class FeedConfigCog(commands.Cog):
     @app_commands.describe(canal="Canal que deixará de receber feeds.")
     @app_commands.guild_only()
     async def remover(self, interaction: discord.Interaction, canal: discord.TextChannel):
-        subs = await db.list_subscriptions_for_guild(interaction.guild_id)
+        subs = await feed_db.list_subscriptions_for_guild(interaction.guild_id)
         sub = next((s for s in subs if s.channel_id == canal.id), None)
 
         if sub and sub.webhook_url:
@@ -125,7 +123,7 @@ class FeedConfigCog(commands.Cog):
             except discord.HTTPException:
                 pass  # Já não existe mais - sem problema.
 
-        await db.remove_subscription(
+        await feed_db.remove_subscription(
             guild_id=interaction.guild_id,
             channel_id=canal.id,
         )
@@ -137,7 +135,7 @@ class FeedConfigCog(commands.Cog):
     @feeds.command(name="listar", description="Lista os canais deste servidor registrados para receber feeds.")
     @app_commands.guild_only()
     async def listar(self, interaction: discord.Interaction):
-        subs = await db.list_subscriptions_for_guild(interaction.guild_id)
+        subs = await feed_db.list_subscriptions_for_guild(interaction.guild_id)
 
         if not subs:
             await interaction.response.send_message(
