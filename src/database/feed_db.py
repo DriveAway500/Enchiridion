@@ -159,4 +159,4 @@ class FeedDatabase:
             )
             await db.commit()
 
-db = FeedDatabase()
+feed_db = FeedDatabase()

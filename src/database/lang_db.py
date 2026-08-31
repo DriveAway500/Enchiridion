@@ -66,4 +66,4 @@ class LanguageDatabase:
             await db.commit()
 
 
-db = LanguageDatabase()
+lang_db = LanguageDatabase()

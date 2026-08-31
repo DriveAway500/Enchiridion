@@ -2,7 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from database import db
+from database import feed_db 
 from feeds import process_feeds_once
 
 SEVERITY_CHOICES = [
@@ -166,41 +166,6 @@ class FeedConfigCog(commands.Cog):
 
         if bloco_atual:
             await self._enviar_bloco(interaction, bloco_atual, primeiro_bloco)
-
-    # @feeds.command(name="testar", description="Roda o ciclo de busca/envio de feeds agora mesmo (para debug).")
-    # @app_commands.guild_only()
-    # async def testar(self, interaction: discord.Interaction):
-    #     await interaction.response.defer(ephemeral=True)
-    #     stats = await process_feeds_once(self.bot, self.bot.feed_classifier)
-
-    #     if stats["items_found"] == 0:
-    #         texto = "🔍 Ciclo executado: nenhum item novo no feed (tudo já havia sido processado antes)."
-    #     elif stats["subscriptions"] == 0:
-    #         texto = (
-    #             f"🔍 Ciclo executado: {stats['items_found']} item(ns) novo(s) encontrado(s), "
-    #             "mas **nenhum canal está registrado** neste momento. Use `/feeds registrar` primeiro."
-    #         )
-    #     elif stats["matched"] == 0:
-    #         texto = (
-    #             f"🔍 Ciclo executado: {stats['items_found']} item(ns) novo(s), "
-    #             f"{stats['subscriptions']} canal(is) registrado(s), mas nenhum item bateu com o "
-    #             "filtro de severidade configurado nesses canais."
-    #         )
-    #     else:
-    #         texto = (
-    #             f"✅ Ciclo executado: {stats['items_found']} item(ns) novo(s), "
-    #             f"{stats['sent_ok']} mensagem(ns) enviada(s) com sucesso"
-    #             + (f", {stats['sent_failed']} falharam (veja o console)." if stats["sent_failed"] else ".")
-    #         )
-
-    #     await interaction.followup.send(texto, ephemeral=True)
-
-    # @staticmethod
-    # async def _enviar_bloco(interaction, texto, primeiro_bloco):
-    #     if primeiro_bloco:
-    #         await interaction.response.send_message(texto, ephemeral=True)
-    #     else:
-    #         await interaction.followup.send(texto, ephemeral=True)
 
 
 async def setup(bot):
