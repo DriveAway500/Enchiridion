@@ -5,7 +5,7 @@ import discord
 from discord.ext import tasks
 
 from .cve_spider import CVEClassifier
-from database import db
+from database import feed_db
 
 MAX_CONCURRENT_SENDS = 20
 
@@ -61,7 +61,7 @@ async def process_feeds_once(bot, classifier):
     if not items:
         return stats
 
-    subscriptions = await db.list_subscriptions()
+    subscriptions = await feed_db.list_subscriptions()
     stats["subscriptions"] = len(subscriptions)
     print(f"[feeds] ciclo: {len(subscriptions)} inscrição(ões) registrada(s) (em todos os servidores)")
 
@@ -90,15 +90,15 @@ async def process_feeds_once(bot, classifier):
             else:
                 stats["sent_failed"] += 1
                 if webhook_sumiu:
-                    await db.remove_subscription(sub.guild_id, sub.channel_id)
+                    await feed_db.remove_subscription(sub.guild_id, sub.channel_id)
 
-        await db.mark_sent(item.id)
+        await feed_db.mark_sent(item.id)
 
     return stats
 
 
 def setup_feed_task(bot, interval_seconds=7200):
-    classifier = CVEClassifier(is_sent_checker=db.is_sent)
+    classifier = CVEClassifier(is_sent_checker=feed_db.is_sent)
     bot.feed_classifier = classifier
 
     @tasks.loop(seconds=interval_seconds)

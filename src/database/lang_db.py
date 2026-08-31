@@ -8,7 +8,6 @@ DEFAULT_DB_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "language.db"
 )
 
-
 @dataclass
 class GuildLanguage:
     guild_id: int
