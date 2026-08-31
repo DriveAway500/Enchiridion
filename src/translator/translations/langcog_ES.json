@@ -1,0 +1,8 @@
+{
+    "when_change": {
+        "response": "El idioma del servidor fue cambiado a: "
+    },
+    "when_check": {
+        "response": "El idioma actual de este servidor es: "
+    }
+}
