@@ -50,9 +50,6 @@ class CVEClassifier:
 
     @staticmethod
     def classify_severity(severity):
-        # OBS: severidade 0.0 é um valor válido de CVSS (ex.: "informativo") e
-        # precisa cair no bucket LOW, não ser descartada. Por isso o LOW usa
-        # ">= 0.0" em vez de ">= 0.1", e o UNKNOWN (-1.0) é checado por último.
         if severity >= 9.0:
             return "[CRITICAL]", "#FF0000"
         elif severity >= 7.0:

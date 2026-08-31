@@ -28,10 +28,6 @@ def _matches_filter(item, sub):
 async def _send_to_subscription(session, sub, item):
     """Envia via webhook. Retorna (enviado_com_sucesso, webhook_sumiu)."""
     if not sub.webhook_url:
-        print(
-            f"Canal {sub.channel_id} (servidor {sub.guild_id}) ainda não tem "
-            "webhook - peça para rodar /feeds registrar novamente."
-        )
         return False, False
 
     webhook = discord.Webhook.from_url(sub.webhook_url, session=session)
@@ -101,7 +97,7 @@ async def process_feeds_once(bot, classifier):
     return stats
 
 
-def setup_feed_task(bot, interval_seconds=300):
+def setup_feed_task(bot, interval_seconds=7200):
     classifier = CVEClassifier(is_sent_checker=db.is_sent)
     bot.feed_classifier = classifier
 

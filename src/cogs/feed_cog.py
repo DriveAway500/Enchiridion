@@ -9,7 +9,7 @@ SEVERITY_CHOICES = [
     app_commands.Choice(name="Crítico (9.0+)", value=9.0),
     app_commands.Choice(name="Alto (7.0+)", value=7.0),
     app_commands.Choice(name="Médio (4.0+)", value=4.0),
-    app_commands.Choice(name="Baixo (qualquer severidade conhecida)", value=0.1),
+    #app_commands.Choice(name="Baixo (qualquer severidade conhecida)", value=0.1),
     app_commands.Choice(name="Tudo (inclui severidade desconhecida)", value=0.0),
 ]
 

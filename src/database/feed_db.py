@@ -5,11 +5,6 @@ from dataclasses import dataclass
 
 import aiosqlite
 
-# Caminho absoluto, ancorado na pasta deste arquivo. Um caminho relativo tipo
-# "feeds.db" depende de qual diretório você está quando roda o bot (cwd),
-# então dois processos rodados de pastas diferentes acabam usando bancos
-# diferentes sem perceber - foi exatamente isso que causou o item "já enviado"
-# mesmo depois de apagar o arquivo.
 DEFAULT_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "feeds.db")
 
 
@@ -45,8 +40,6 @@ class FeedDatabase:
                 )
                 """
             )
-            # Migração simples para bancos criados antes da coluna webhook_url
-            # existir. Se a coluna já existe, o ALTER falha e ignoramos.
             try:
                 await db.execute("ALTER TABLE subscriptions ADD COLUMN webhook_url TEXT")
             except Exception:
@@ -166,6 +159,4 @@ class FeedDatabase:
             )
             await db.commit()
 
-
-# Instância única exportada
 db = FeedDatabase()
