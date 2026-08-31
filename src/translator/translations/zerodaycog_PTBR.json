@@ -1,0 +1,21 @@
+{
+  "zerodaycog": {
+    "cog": {
+      "cmd_desc": "Pesquisar exploits no 0daytoday",
+      "arg_search_desc": "O que pesquisar (termo livre ou CVE)",
+      "err_too_short": "❌ Termo muito curto (mínimo 3 caracteres).",
+      "not_found": "🔍 Nenhum zero-day encontrado para `{search}`."
+    },
+    "view": {
+      "btn_view_exploit": "Ver Exploit",
+      "err_code_fetch": "❌ Não foi possível carregar o código deste exploit.",
+      "lbl_category": "Categoria",
+      "lbl_platform": "Plataforma",
+      "lbl_date": "Data",
+      "lbl_author": "Autor",
+      "btn_prev": "◀ Anteriores",
+      "btn_page": "Página {page}",
+      "btn_next": "Próximos ▶"
+    }
+  }
+}

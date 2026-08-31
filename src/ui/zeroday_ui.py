@@ -1,4 +1,5 @@
 import io
+
 import discord
 from discord import ui
 
@@ -8,9 +9,13 @@ PAGE_SIZE = 5
 
 
 class ExploitButton(ui.Button):
-    def __init__(self, exploit_id, title):
+
+    def __init__(self, exploit_id, title, translations=None):
+        self.translations = translations or {}
+        label_text = self.translations.get("btn_view_exploit", "View Exploit")
+
         super().__init__(
-            label="Ver Exploit",
+            label=label_text,
             style=discord.ButtonStyle.secondary,
             custom_id=f"exploit_view_{exploit_id}",
         )
@@ -22,8 +27,12 @@ class ExploitButton(ui.Button):
 
         data = await get_zeroday_exploit(self.exploit_id)
         if not data or "code" not in data:
+            err_msg = self.translations.get(
+                "err_code_fetch",
+                "❌ Could not load code for this exploit.",
+            )
             await interaction.followup.send(
-                "❌ Não foi possível carregar o código deste exploit.",
+                err_msg,
                 ephemeral=True,
             )
             return
@@ -49,14 +58,18 @@ class ExploitButton(ui.Button):
         if panel_view.active_code_message:
             try:
                 if file_obj:
-                    panel_view.active_code_message = await panel_view.active_code_message.edit(
-                        content=message_content,
-                        attachments=[file_obj],
+                    panel_view.active_code_message = (
+                        await panel_view.active_code_message.edit(
+                            content=message_content,
+                            attachments=[file_obj],
+                        )
                     )
                 else:
-                    panel_view.active_code_message = await panel_view.active_code_message.edit(
-                        content=message_content,
-                        attachments=[],
+                    panel_view.active_code_message = (
+                        await panel_view.active_code_message.edit(
+                            content=message_content,
+                            attachments=[],
+                        )
                     )
                 return
             except discord.NotFound:
@@ -78,10 +91,20 @@ class ExploitButton(ui.Button):
 
 
 class ZeroDayPanel(ui.LayoutView):
-    def __init__(self, query, initial_results, current_page=1):
+
+    def __init__(
+        self,
+        query,
+        initial_results,
+        current_page=1,
+        lang="EN",
+        translations=None,
+    ):
         super().__init__(timeout=180)
         self.query = query
         self.current_page = current_page
+        self.lang = lang
+        self.translations = translations or {}
         self.active_code_message = None
         self.message = None
         self.build_ui(initial_results)
@@ -105,6 +128,11 @@ class ZeroDayPanel(ui.LayoutView):
     def build_ui(self, exploits):
         self.clear_items()
 
+        lbl_category = self.translations.get("lbl_category", "Category")
+        lbl_platform = self.translations.get("lbl_platform", "Platform")
+        lbl_date = self.translations.get("lbl_date", "Date")
+        lbl_author = self.translations.get("lbl_author", "Author")
+
         for exploit in exploits:
             cves = exploit.get("cve")
             cves_line = f"**CVEs:** `{', '.join(cves)}`\n" if cves else ""
@@ -115,10 +143,10 @@ class ZeroDayPanel(ui.LayoutView):
             )
 
             details_text = (
-                f"**Categoria:** `{exploit.get('category', 'N/A')}`\n"
-                f"**Plataforma:** `{exploit.get('platform', 'N/A')}`\n"
-                f"**Data:** {exploit.get('date', 'N/A')}\n"
-                f"**Autor:** {exploit.get('author', 'N/A')}\n"
+                f"**{lbl_category}:** `{exploit.get('category', 'N/A')}`\n"
+                f"**{lbl_platform}:** `{exploit.get('platform', 'N/A')}`\n"
+                f"**{lbl_date}:** {exploit.get('date', 'N/A')}\n"
+                f"**{lbl_author}:** {exploit.get('author', 'N/A')}\n"
                 f"{cves_line}"
             )
             container.add_item(ui.TextDisplay(details_text))
@@ -128,6 +156,7 @@ class ZeroDayPanel(ui.LayoutView):
                 ExploitButton(
                     exploit_id=exploit["exploit_id"],
                     title=exploit.get("title", ""),
+                    translations=self.translations,
                 )
             )
             container.add_item(btn_row)
@@ -140,8 +169,12 @@ class ZeroDayPanel(ui.LayoutView):
     def add_pagination_controls(self, has_more_pages):
         nav_row = ui.ActionRow()
 
+        lbl_prev = self.translations.get("btn_prev", "◀ Previous")
+        lbl_next = self.translations.get("btn_next", "Next ▶")
+        page_tpl = self.translations.get("btn_page", "Page {page}")
+
         prev_button = ui.Button(
-            label="◀ Anteriores",
+            label=lbl_prev,
             style=discord.ButtonStyle.primary,
             disabled=self.current_page <= 1,
         )
@@ -149,14 +182,14 @@ class ZeroDayPanel(ui.LayoutView):
         nav_row.add_item(prev_button)
 
         page_indicator = ui.Button(
-            label=f"Página {self.current_page}",
+            label=page_tpl.format(page=self.current_page),
             style=discord.ButtonStyle.secondary,
             disabled=True,
         )
         nav_row.add_item(page_indicator)
 
         next_button = ui.Button(
-            label="Próximos ▶",
+            label=lbl_next,
             style=discord.ButtonStyle.primary,
             disabled=not has_more_pages,
         )
