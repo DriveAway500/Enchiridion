@@ -5,14 +5,13 @@ from discord.ext import commands
 from database import lang_db
 
 LANGUAGE_CHOICES = [
-    app_commands.Choice(name="Português (Brasil)", value="pt_BR"),
-    app_commands.Choice(name="English (US)", value="en_US"),
-    app_commands.Choice(name="Español", value="es_ES"),
+    app_commands.Choice(name="Português (Brasil)", value="PTBR"),
+    app_commands.Choice(name="English (US)", value="EN"),
+    app_commands.Choice(name="Español", value="ES"),
 ]
 
 
 class LanguageConfigCog(commands.Cog):
-    """Comandos para configurar o idioma do bot no servidor."""
 
     def __init__(self, bot):
         self.bot = bot
@@ -48,7 +47,6 @@ class LanguageConfigCog(commands.Cog):
     async def atual(self, interaction: discord.Interaction):
         current_lang = await lang_db.get_language(interaction.guild_id)
 
-        # Mapeia a string para o nome amigável da escolha
         nome_idioma = next(
             (c.name for c in LANGUAGE_CHOICES if c.value == current_lang),
             current_lang,
