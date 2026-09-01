@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from database import lang_db
-from translator import load_command_translation
+from translations import langcog_translate
 
 LANGUAGE_CHOICES = [
     app_commands.Choice(name="Português (Brasil)", value="PTBR"),
@@ -18,17 +18,17 @@ class LanguageConfigCog(commands.Cog):
         self.bot = bot
 
     lang = app_commands.Group(
-        name="idioma",
-        description="Configura o idioma do bot neste servidor.",
+        name="language",
+        description="Sets up the bot's language for this server.",
         default_permissions=discord.Permissions(manage_guild=True),
         guild_only=True,
     )
 
     @lang.command(
-        name="definir",
-        description="Define o idioma padrão para as mensagens deste servidor.",
+        name="set",
+        description="Sets the default language for this server's messages.",
     )
-    @app_commands.describe(idioma="Escolha o novo idioma do servidor.")
+    @app_commands.describe(idioma="Choose the new server language.")
     @app_commands.choices(idioma=LANGUAGE_CHOICES)
     @app_commands.guild_only()
     async def definir(
@@ -41,21 +41,19 @@ class LanguageConfigCog(commands.Cog):
             language=idioma.value,
         )
 
-        translation_data = await load_command_translation(
-            "langcog", idioma.value, "when_change"
-        )
-        base_message = translation_data.get(
-            "response", "Server language changed to: "
+        msg = await langcog_translate(
+            interaction.guild_id,
+            "success",
+            "changed",
+            nome=idioma.name,
+            codigo=idioma.value,
         )
 
-        await interaction.response.send_message(
-            f"🌐 {base_message} **{idioma.name}** (`{idioma.value}`).",
-            ephemeral=True,
-        )
+        await interaction.response.send_message(msg, ephemeral=True)
 
     @lang.command(
-        name="atual",
-        description="Exibe o idioma atualmente configurado no servidor.",
+        name="current",
+        description="Displays the language currently set up for the server.",
     )
     @app_commands.guild_only()
     async def atual(self, interaction: discord.Interaction) -> None:
@@ -66,17 +64,15 @@ class LanguageConfigCog(commands.Cog):
             current_lang,
         )
 
-        translation_data = await load_command_translation(
-            "langcog", current_lang, "when_check"
-        )
-        base_message = translation_data.get(
-            "response", "Current server language is: "
+        msg = await langcog_translate(
+            interaction.guild_id,
+            "success",
+            "current",
+            nome=nome_idioma,
+            codigo=current_lang,
         )
 
-        await interaction.response.send_message(
-            f"🌐 {base_message} **{nome_idioma}** (`{current_lang}`).",
-            ephemeral=True,
-        )
+        await interaction.response.send_message(msg, ephemeral=True)
 
 
 async def setup(bot: commands.Bot) -> None:

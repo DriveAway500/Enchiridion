@@ -11,7 +11,7 @@ class HelpCog(commands.Cog):
 
     @app_commands.command(
         name="help",
-        description="Exibe informações de ajuda sobre as ferramentas de pesquisa.",
+        description="Displays help information about the search tools.",
     )
     @app_commands.guild_only()
     @app_commands.choices(
