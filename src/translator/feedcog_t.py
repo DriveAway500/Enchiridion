@@ -1,3 +1,5 @@
+from database import lang_db
+
 MESSAGES = {
     "PTBR": {
         "errors": {
