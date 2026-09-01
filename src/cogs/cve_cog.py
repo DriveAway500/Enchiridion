@@ -23,9 +23,11 @@ class CveCog(commands.Cog):
         method: app_commands.Choice[str],
     ):
         if method.value == "cve":
-            await interaction.response.send_modal(CVEIdSearchModal())
+            modal = await CVEIdSearchModal.create(interaction.guild_id)
         else:
-            await interaction.response.send_modal(CVEPackageSearchModal())
+            modal = await CVEPackageSearchModal.create(interaction.guild_id)
+
+        await interaction.response.send_modal(modal)
 
 
 async def setup(bot):

@@ -18,52 +18,51 @@ CVE_PATTERN = re.compile(r"^CVE-\d{4}-\d{4,7}$", re.IGNORECASE)
 
 class CVEPackageSearchModal(ui.Modal):
 
-    def __init__(self, guild_id: int | None = None) -> None:
+    def __init__(self, guild_id: int | None, texts: dict) -> None:
         self.guild_id = guild_id
-        super().__init__(title="Search CVEs")
+        self.texts = texts
+        super().__init__(title=texts["title"])
 
         self.score = ui.Label(
-            text="CVSS Score",
-            description="Filter by severity / score",
+            text=texts["lbl_score"],
+            description=texts["desc_score"],
             component=ui.Select(
                 custom_id="score_select",
-                placeholder="Select score range",
+                placeholder=texts["ph_score"],
                 min_values=1,
                 max_values=1,
                 options=[
-                    discord.SelectOption(label="Low (0.1 - 3.9)", value="low"),
-                    discord.SelectOption(label="Medium (4.0 - 6.9)", value="medium"),
-                    discord.SelectOption(label="High (7.0 - 8.9)", value="high"),
+                    discord.SelectOption(label=texts["opt_low"], value="low"),
+                    discord.SelectOption(label=texts["opt_medium"], value="medium"),
+                    discord.SelectOption(label=texts["opt_high"], value="high"),
                     discord.SelectOption(
-                        label="Critical (9.0 - 10.0)", value="critical"
+                        label=texts["opt_critical"], value="critical"
                     ),
                 ],
             ),
         )
 
         self.year = ui.Label(
-            text="Time Range",
-            description="Choose publication year",
+            text=texts["lbl_year"],
+            description=texts["desc_year"],
             component=ui.Select(
                 custom_id="year_select",
-                placeholder="Select year",
+                placeholder=texts["ph_year"],
                 min_values=1,
                 max_values=1,
                 options=[
-                    discord.SelectOption(
-                        label=str(y), value=str(y)
-                    )
+                    discord.SelectOption(label=str(y), value=str(y))
                     for y in range(2026, 2001, -1)
                 ],
             ),
         )
 
         self.package_name = ui.Label(
-            text="Package or Term",
-            description="Enter package name or keyword",
+            text=texts["lbl_package"],
+            description=texts["desc_package"],
             component=ui.TextInput(
                 style=discord.TextStyle.short,
-                placeholder="e.g., linux, openssl, sudo...",
+                placeholder=texts["ph_package"],
                 max_length=100,
                 required=True,
             ),
@@ -72,6 +71,34 @@ class CVEPackageSearchModal(ui.Modal):
         self.add_item(self.score)
         self.add_item(self.year)
         self.add_item(self.package_name)
+
+    @classmethod
+    async def create(cls, guild_id: int | None = None) -> "CVEPackageSearchModal":
+        """Busca as strings traduzidas e só então monta o modal.
+
+        __init__ não pode ser async, então a tradução precisa acontecer
+        antes, aqui na factory.
+        """
+        texts = {
+            key: await cvecog_translate(guild_id, "pkg_modal", key)
+            for key in (
+                "title",
+                "lbl_score",
+                "desc_score",
+                "ph_score",
+                "opt_low",
+                "opt_medium",
+                "opt_high",
+                "opt_critical",
+                "lbl_year",
+                "desc_year",
+                "ph_year",
+                "lbl_package",
+                "desc_package",
+                "ph_package",
+            )
+        }
+        return cls(guild_id, texts)
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
@@ -91,8 +118,8 @@ class CVEPackageSearchModal(ui.Modal):
         if not results:
             not_found_msg = await cvecog_translate(
                 interaction.guild_id,
-                "modal",
-                "not_found_package",
+                "pkg_modal",
+                "not_found",
                 package=package,
                 year=selected_year,
                 severity=score_range,
@@ -122,9 +149,7 @@ class CVEPackageSearchModal(ui.Modal):
     async def on_error(
         self, interaction: discord.Interaction, error: Exception
     ) -> None:
-        err_msg = await cvecog_translate(
-            interaction.guild_id, "modal", "error_generic"
-        )
+        err_msg = await cvecog_translate(interaction.guild_id, "pkg_modal", "error")
         if interaction.response.is_done():
             await interaction.followup.send(err_msg, ephemeral=True)
         else:
@@ -139,13 +164,14 @@ class CVEPackageSearchModal(ui.Modal):
 
 class CVEIdSearchModal(ui.Modal):
 
-    def __init__(self, guild_id: int | None = None) -> None:
+    def __init__(self, guild_id: int | None, texts: dict) -> None:
         self.guild_id = guild_id
-        super().__init__(title="Search CVE")
+        self.texts = texts
+        super().__init__(title=texts["title"])
 
         self.cve_id = ui.TextInput(
-            label="CVE ID",
-            placeholder="e.g., CVE-2021-44228",
+            label=texts["lbl_id"],
+            placeholder=texts["ph_id"],
             style=discord.TextStyle.short,
             min_length=13,
             max_length=20,
@@ -154,12 +180,20 @@ class CVEIdSearchModal(ui.Modal):
 
         self.add_item(self.cve_id)
 
+    @classmethod
+    async def create(cls, guild_id: int | None = None) -> "CVEIdSearchModal":
+        texts = {
+            key: await cvecog_translate(guild_id, "id_modal", key)
+            for key in ("title", "lbl_id", "ph_id")
+        }
+        return cls(guild_id, texts)
+
     async def on_submit(self, interaction: discord.Interaction) -> None:
         cve_code = self.cve_id.value.strip().upper()
 
         if not CVE_PATTERN.match(cve_code):
             invalid_msg = await cvecog_translate(
-                interaction.guild_id, "modal", "invalid_format"
+                interaction.guild_id, "id_modal", "invalid_format"
             )
             await interaction.response.send_message(
                 f"❌ {invalid_msg}",
@@ -174,8 +208,8 @@ class CVEIdSearchModal(ui.Modal):
         if not data:
             not_found_msg = await cvecog_translate(
                 interaction.guild_id,
-                "modal",
-                "not_found_id",
+                "id_modal",
+                "not_found",
                 cve_code=cve_code,
             )
             await interaction.followup.send(
@@ -199,9 +233,7 @@ class CVEIdSearchModal(ui.Modal):
     async def on_error(
         self, interaction: discord.Interaction, error: Exception
     ) -> None:
-        err_msg = await cvecog_translate(
-            interaction.guild_id, "modal", "error_generic"
-        )
+        err_msg = await cvecog_translate(interaction.guild_id, "id_modal", "error")
         if interaction.response.is_done():
             await interaction.followup.send(err_msg, ephemeral=True)
         else:
