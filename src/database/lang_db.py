@@ -37,7 +37,7 @@ class LanguageDatabase:
             self._initialized = True
             print(f"[db] usando banco de dados em: {self.db_path}")
 
-    async def get_language(self, guild_id, default="pt_BR"):
+    async def get_language(self, guild_id, default="EN"):
         await self._ensure_init()
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute(

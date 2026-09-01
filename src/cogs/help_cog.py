@@ -2,8 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from database import lang_db
-from translator import load_command_translation
+from translator import helpcog_translate
 
 
 class HelpCog(commands.Cog):
@@ -12,7 +11,7 @@ class HelpCog(commands.Cog):
 
     @app_commands.command(
         name="help",
-        description="Exibe informações de ajuda sobre as ferramentas de pesquisa.",
+        description="Displays help information about the search tools.",
     )
     @app_commands.guild_only()
     @app_commands.choices(
@@ -23,24 +22,12 @@ class HelpCog(commands.Cog):
         ]
     )
     async def help(self, interaction: discord.Interaction, opcao: app_commands.Choice[str]):
-        lang = "EN"
-        if interaction.guild_id:
-            lang = await lang_db.get_language(interaction.guild_id, default="EN")
-
-        data = await load_command_translation("help", lang)
-
-        tool_info = data.get(opcao.value)
-
-        if not tool_info:
-            error_message = (
-                "No information found for the selected option."
-                if lang == "EN"
-                else "Nenhuma informação encontrada para a opção selecionada."
-            )
+        try:
+            description = await helpcog_translate(interaction.guild_id, "docs", opcao.value)
+        except (KeyError, TypeError):
+            error_message = await helpcog_translate(interaction.guild_id, "errors", "not_found")
             await interaction.response.send_message(error_message, ephemeral=True)
             return
-
-        description = tool_info["documentation"]
 
         embed = discord.Embed(
             title=f"/{opcao.name}",

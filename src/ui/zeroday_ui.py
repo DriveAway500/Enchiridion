@@ -4,16 +4,14 @@ import discord
 from discord import ui
 
 from omega_api import get_zeroday_exploit, search_zeroday_exploits
+from translator import zerodaycog_translate
 
 PAGE_SIZE = 5
 
 
 class ExploitButton(ui.Button):
 
-    def __init__(self, exploit_id, title, translations=None):
-        self.translations = translations or {}
-        label_text = self.translations.get("btn_view_exploit", "View Exploit")
-
+    def __init__(self, exploit_id: str, title: str, label_text: str) -> None:
         super().__init__(
             label=label_text,
             style=discord.ButtonStyle.secondary,
@@ -22,17 +20,16 @@ class ExploitButton(ui.Button):
         self.exploit_id = exploit_id
         self.title = title
 
-    async def callback(self, interaction):
+    async def callback(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
 
         data = await get_zeroday_exploit(self.exploit_id)
         if not data or "code" not in data:
-            err_msg = self.translations.get(
-                "err_code_fetch",
-                "❌ Could not load code for this exploit.",
+            error_msg = await zerodaycog_translate(
+                self.view.guild_id, "errors", "load_failed"
             )
             await interaction.followup.send(
-                err_msg,
+                error_msg,
                 ephemeral=True,
             )
             return
@@ -94,22 +91,23 @@ class ZeroDayPanel(ui.LayoutView):
 
     def __init__(
         self,
-        query,
-        initial_results,
-        current_page=1,
-        lang="EN",
-        translations=None,
-    ):
+        guild_id: int,
+        query: str,
+        initial_results: list,
+        current_page: int = 1,
+    ) -> None:
         super().__init__(timeout=180)
+        self.guild_id = guild_id
         self.query = query
         self.current_page = current_page
-        self.lang = lang
-        self.translations = translations or {}
         self.active_code_message = None
         self.message = None
-        self.build_ui(initial_results)
+        self.initial_results = initial_results
 
-    async def on_timeout(self):
+    async def init_ui(self) -> None:
+        await self.build_ui(self.initial_results)
+
+    async def on_timeout(self) -> None:
         def disable_all(items):
             for item in items:
                 if hasattr(item, "disabled"):
@@ -125,13 +123,14 @@ class ZeroDayPanel(ui.LayoutView):
             except (discord.NotFound, discord.HTTPException):
                 pass
 
-    def build_ui(self, exploits):
+    async def build_ui(self, exploits: list) -> None:
         self.clear_items()
 
-        lbl_category = self.translations.get("lbl_category", "Category")
-        lbl_platform = self.translations.get("lbl_platform", "Platform")
-        lbl_date = self.translations.get("lbl_date", "Date")
-        lbl_author = self.translations.get("lbl_author", "Author")
+        lbl_category = await zerodaycog_translate(self.guild_id, "ui", "lbl_category")
+        lbl_platform = await zerodaycog_translate(self.guild_id, "ui", "lbl_platform")
+        lbl_date = await zerodaycog_translate(self.guild_id, "ui", "lbl_date")
+        lbl_author = await zerodaycog_translate(self.guild_id, "ui", "lbl_author")
+        btn_view_text = await zerodaycog_translate(self.guild_id, "ui", "btn_view")
 
         for exploit in exploits:
             cves = exploit.get("cve")
@@ -156,7 +155,7 @@ class ZeroDayPanel(ui.LayoutView):
                 ExploitButton(
                     exploit_id=exploit["exploit_id"],
                     title=exploit.get("title", ""),
-                    translations=self.translations,
+                    label_text=btn_view_text,
                 )
             )
             container.add_item(btn_row)
@@ -164,14 +163,16 @@ class ZeroDayPanel(ui.LayoutView):
             self.add_item(container)
 
         has_more_pages = len(exploits) == PAGE_SIZE
-        self.add_pagination_controls(has_more_pages=has_more_pages)
+        await self.add_pagination_controls(has_more_pages=has_more_pages)
 
-    def add_pagination_controls(self, has_more_pages):
+    async def add_pagination_controls(self, has_more_pages: bool) -> None:
         nav_row = ui.ActionRow()
 
-        lbl_prev = self.translations.get("btn_prev", "◀ Previous")
-        lbl_next = self.translations.get("btn_next", "Next ▶")
-        page_tpl = self.translations.get("btn_page", "Page {page}")
+        lbl_prev = await zerodaycog_translate(self.guild_id, "ui", "btn_prev")
+        lbl_next = await zerodaycog_translate(self.guild_id, "ui", "btn_next")
+        page_indicator_text = await zerodaycog_translate(
+            self.guild_id, "ui", "page_indicator", page=self.current_page
+        )
 
         prev_button = ui.Button(
             label=lbl_prev,
@@ -182,7 +183,7 @@ class ZeroDayPanel(ui.LayoutView):
         nav_row.add_item(prev_button)
 
         page_indicator = ui.Button(
-            label=page_tpl.format(page=self.current_page),
+            label=page_indicator_text,
             style=discord.ButtonStyle.secondary,
             disabled=True,
         )
@@ -198,16 +199,16 @@ class ZeroDayPanel(ui.LayoutView):
 
         self.add_item(nav_row)
 
-    async def prev_page(self, interaction):
+    async def prev_page(self, interaction: discord.Interaction) -> None:
         if self.current_page > 1:
             self.current_page -= 1
             await self.update_page(interaction)
 
-    async def next_page(self, interaction):
+    async def next_page(self, interaction: discord.Interaction) -> None:
         self.current_page += 1
         await self.update_page(interaction)
 
-    async def update_page(self, interaction):
+    async def update_page(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
         results = await search_zeroday_exploits(
             self.query, page=self.current_page, limit=PAGE_SIZE
@@ -217,5 +218,5 @@ class ZeroDayPanel(ui.LayoutView):
             self.current_page -= 1
             return
 
-        self.build_ui(results)
+        await self.build_ui(results)
         await interaction.edit_original_response(view=self)

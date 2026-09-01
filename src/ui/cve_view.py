@@ -2,7 +2,7 @@ import discord
 from discord import ui
 
 from omega_api import get_cve, search_cves_by_package
-from translator import load_command_translation
+from translator import cvecog_translate
 
 PAGE_SIZE = 5
 
@@ -12,15 +12,15 @@ class CVEDetailView(ui.LayoutView):
     def __init__(
         self,
         cve_data: dict,
-        lang: str = "EN",
-        translations: dict = None,
+        guild_id: int | None = None,
     ) -> None:
         super().__init__(timeout=180)
         self.cve_data = cve_data
-        self.lang = lang
-        self.translations = translations or {}
+        self.guild_id = guild_id
         self.message = None
-        self.build_ui()
+
+    async def init_ui(self) -> None:
+        await self.build_ui()
 
     async def on_timeout(self) -> None:
         def disable_all(items) -> None:
@@ -38,7 +38,7 @@ class CVEDetailView(ui.LayoutView):
             except (discord.NotFound, discord.HTTPException):
                 pass
 
-    def build_ui(self) -> None:
+    async def build_ui(self) -> None:
         self.clear_items()
         data = self.cve_data
 
@@ -48,8 +48,8 @@ class CVEDetailView(ui.LayoutView):
         last_modified = data.get("lastModified", "N/A").split("T")[0]
 
         descriptions = data.get("descriptions", [])
-        no_desc_text = self.translations.get(
-            "no_description", "No description available."
+        no_desc_text = await cvecog_translate(
+            self.guild_id, "detail_view", "no_description"
         )
         desc_text = next(
             (d["value"] for d in descriptions if d.get("lang") == "en"),
@@ -71,16 +71,18 @@ class CVEDetailView(ui.LayoutView):
 
         container = ui.Container()
 
-        title_tpl = self.translations.get(
-            "details_title", "🛡️ **Details for {cve_id}**"
+        title_text = await cvecog_translate(
+            self.guild_id, "detail_view", "details_title", cve_id=cve_id
         )
-        container.add_item(ui.TextDisplay(title_tpl.format(cve_id=cve_id)))
+        container.add_item(ui.TextDisplay(title_text))
 
-        lbl_status = self.translations.get("status", "Status")
-        lbl_published = self.translations.get("published", "Published on")
-        lbl_updated = self.translations.get("updated", "Updated")
-        lbl_score = self.translations.get("score", "Score")
-        lbl_vector = self.translations.get("vector", "Vector")
+        lbl_status = await cvecog_translate(self.guild_id, "detail_view", "status")
+        lbl_published = await cvecog_translate(
+            self.guild_id, "detail_view", "published"
+        )
+        lbl_updated = await cvecog_translate(self.guild_id, "detail_view", "updated")
+        lbl_score = await cvecog_translate(self.guild_id, "detail_view", "score")
+        lbl_vector = await cvecog_translate(self.guild_id, "detail_view", "vector")
 
         info_text = (
             f"**{lbl_status}:** `{status}`\n"
@@ -90,25 +92,27 @@ class CVEDetailView(ui.LayoutView):
         )
         container.add_item(ui.TextDisplay(info_text))
 
-        lbl_desc = self.translations.get("description", "Description")
+        lbl_desc = await cvecog_translate(
+            self.guild_id, "detail_view", "description"
+        )
         container.add_item(ui.TextDisplay(f"**{lbl_desc}:**\n{desc_text}"))
 
         references = data.get("references", [])
         if references:
             btn_row = ui.ActionRow()
-            ref_single_tpl = self.translations.get("ref_single", "Source Link")
-            ref_multi_tpl = self.translations.get(
-                "ref_multiple", "Source Link {idx}"
-            )
 
             for idx, ref in enumerate(references[:3], start=1):
                 url = ref.get("url")
                 if url:
-                    label_str = (
-                        ref_multi_tpl.format(idx=idx)
-                        if len(references) > 1
-                        else ref_single_tpl
-                    )
+                    if len(references) > 1:
+                        label_str = await cvecog_translate(
+                            self.guild_id, "detail_view", "ref_multiple", idx=idx
+                        )
+                    else:
+                        label_str = await cvecog_translate(
+                            self.guild_id, "detail_view", "ref_single"
+                        )
+
                     btn_row.add_item(
                         ui.Button(
                             label=label_str,
@@ -127,7 +131,7 @@ class CVEButton(ui.Button):
         self,
         cve_id: str,
         label_text: str = "View Details",
-        lang: str = "EN",
+        guild_id: int | None = None,
     ) -> None:
         super().__init__(
             label=label_text,
@@ -135,24 +139,19 @@ class CVEButton(ui.Button):
             custom_id=f"cve_view_{cve_id}",
         )
         self.cve_id = cve_id
-        self.lang = lang
+        self.guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
 
         data = await get_cve(self.cve_id)
         if not data:
-            try:
-                detail_trans = await load_command_translation(
-                    "cvecog", self.lang, "detail_view"
-                )
-            except Exception:
-                detail_trans = {}
-
-            err_tpl = detail_trans.get(
-                "load_error", "Could not load details for `{cve_id}`."
+            msg_text = await cvecog_translate(
+                interaction.guild_id,
+                "detail_view",
+                "load_error",
+                cve_id=self.cve_id,
             )
-            msg_text = err_tpl.format(cve_id=self.cve_id)
 
             await interaction.followup.send(
                 f"❌ {msg_text}",
@@ -160,18 +159,11 @@ class CVEButton(ui.Button):
             )
             return
 
-        try:
-            detail_translations = await load_command_translation(
-                "cvecog", self.lang, "detail_view"
-            )
-        except Exception:
-            detail_translations = {}
-
         detail_view = CVEDetailView(
             cve_data=data,
-            lang=self.lang,
-            translations=detail_translations,
+            guild_id=interaction.guild_id,
         )
+        await detail_view.init_ui()
 
         if hasattr(self.view, "detail_message") and self.view.detail_message:
             try:
@@ -181,9 +173,7 @@ class CVEButton(ui.Button):
             except (discord.NotFound, discord.HTTPException):
                 self.view.detail_message = None
 
-        msg = await interaction.followup.send(
-            view=detail_view, wait=True
-        )
+        msg = await interaction.followup.send(view=detail_view, wait=True)
         detail_view.message = msg
         if hasattr(self.view, "detail_message"):
             self.view.detail_message = msg
@@ -193,24 +183,25 @@ class CVEPanel(ui.LayoutView):
 
     def __init__(
         self,
+        guild_id: int | None,
         package_name: str,
         year: str,
         severity: str,
         initial_results: list,
         current_page: int = 1,
-        lang: str = "EN",
-        translations: dict = None,
     ) -> None:
         super().__init__(timeout=180)
+        self.guild_id = guild_id
         self.package_name = package_name
         self.year = year
         self.severity = severity
         self.current_page = current_page
-        self.lang = lang
-        self.translations = translations or {}
+        self.initial_results = initial_results
         self.message = None
         self.detail_message = None
-        self.build_ui(initial_results)
+
+    async def init_ui(self) -> None:
+        await self.build_ui(self.initial_results)
 
     async def on_timeout(self) -> None:
         def disable_all(items) -> None:
@@ -234,25 +225,29 @@ class CVEPanel(ui.LayoutView):
         error: Exception,
         item: ui.Item,
     ) -> None:
-        err_msg = self.translations.get(
-            "error_update", "Something went wrong while updating the panel!"
+        err_msg = await cvecog_translate(
+            interaction.guild_id, "panel_view", "error_update"
         )
         if interaction.response.is_done():
             await interaction.followup.send(err_msg, ephemeral=True)
         else:
             await interaction.response.send_message(err_msg, ephemeral=True)
 
-    def build_ui(self, cves: list) -> None:
+    async def build_ui(self, cves: list) -> None:
         self.clear_items()
 
-        btn_details_label = self.translations.get(
-            "btn_details", "View Details"
+        btn_details_label = await cvecog_translate(
+            self.guild_id, "panel_view", "btn_details"
         )
-        lbl_score = self.translations.get("score", "Score")
-        lbl_published = self.translations.get("published", "Published on")
-        lbl_desc = self.translations.get("description", "Description")
-        no_desc_text = self.translations.get(
-            "no_description", "No description available."
+        lbl_score = await cvecog_translate(self.guild_id, "panel_view", "score")
+        lbl_published = await cvecog_translate(
+            self.guild_id, "panel_view", "published"
+        )
+        lbl_desc = await cvecog_translate(
+            self.guild_id, "panel_view", "description"
+        )
+        no_desc_text = await cvecog_translate(
+            self.guild_id, "panel_view", "no_description"
         )
 
         for cve in cves:
@@ -313,7 +308,7 @@ class CVEPanel(ui.LayoutView):
                 CVEButton(
                     cve_id=cve_id,
                     label_text=btn_details_label,
-                    lang=self.lang,
+                    guild_id=self.guild_id,
                 )
             )
             container.add_item(btn_row)
@@ -321,15 +316,15 @@ class CVEPanel(ui.LayoutView):
             self.add_item(container)
 
         has_more_pages = len(cves) == PAGE_SIZE
-        self.add_pagination_controls(has_more_pages=has_more_pages)
+        await self.add_pagination_controls(has_more_pages=has_more_pages)
 
-    def add_pagination_controls(self, has_more_pages: bool) -> None:
+    async def add_pagination_controls(self, has_more_pages: bool) -> None:
         nav_row = ui.ActionRow()
 
-        lbl_prev = self.translations.get("btn_prev", "◀ Previous")
-        lbl_next = self.translations.get("btn_next", "Next ▶")
-        page_indicator_tpl = self.translations.get(
-            "page_indicator", "Page {page}"
+        lbl_prev = await cvecog_translate(self.guild_id, "panel_view", "btn_prev")
+        lbl_next = await cvecog_translate(self.guild_id, "panel_view", "btn_next")
+        page_indicator_label = await cvecog_translate(
+            self.guild_id, "panel_view", "page_indicator", page=self.current_page
         )
 
         prev_button = ui.Button(
@@ -341,7 +336,7 @@ class CVEPanel(ui.LayoutView):
         nav_row.add_item(prev_button)
 
         page_indicator = ui.Button(
-            label=page_indicator_tpl.format(page=self.current_page),
+            label=page_indicator_label,
             style=discord.ButtonStyle.secondary,
             disabled=True,
         )
@@ -380,5 +375,5 @@ class CVEPanel(ui.LayoutView):
             self.current_page -= 1
             return
 
-        self.build_ui(results)
+        await self.build_ui(results)
         await interaction.edit_original_response(view=self)

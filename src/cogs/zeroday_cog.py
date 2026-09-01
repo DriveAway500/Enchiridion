@@ -2,16 +2,15 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from database import lang_db
 from omega_api import search_zeroday_exploits
-from translator import load_command_translation
+from translator import zerodaycog_translate
 from ui import ZeroDayPanel
 
 
 class ZerodayCog(commands.Cog):
 
     def __init__(self, bot: commands.Bot) -> None:
-        self.bot: commands.Bot = bot
+        self.bot = bot
 
     @app_commands.command(
         name="zerodaytoday", description="Search exploits on 0daytoday"
@@ -22,27 +21,13 @@ class ZerodayCog(commands.Cog):
         self, interaction: discord.Interaction, search: str
     ) -> None:
         await interaction.response.defer(thinking=True)
-        search: str = search.strip()
-
-        lang: str = await lang_db.get_language(interaction.guild_id)
-
-        try:
-            cog_translations: dict = await load_command_translation(
-                "zerodaycog", lang, "cog"
-            )
-            view_translations: dict = await load_command_translation(
-                "zerodaycog", lang, "view"
-            )
-        except Exception:
-            cog_translations: dict = {}
-            view_translations: dict = {}
+        search = search.strip()
 
         if len(search) < 3:
-            msg_short: str = cog_translations.get(
-                "err_too_short",
-                "❌ Search query too short (minimum 3 characters).",
+            msg_text = await zerodaycog_translate(
+                interaction.guild_id, "errors", "too_short"
             )
-            await interaction.followup.send(msg_short)
+            await interaction.followup.send(msg_text)
             return
 
         try:
@@ -51,24 +36,21 @@ class ZerodayCog(commands.Cog):
             result = None
 
         if not result:
-            not_found_tpl: str = cog_translations.get(
-                "not_found",
-                "🔍 No zero-day found for `{search}`.",
+            msg_text = await zerodaycog_translate(
+                interaction.guild_id, "errors", "not_found", search=search
             )
-            await interaction.followup.send(
-                not_found_tpl.format(search=search)
-            )
+            await interaction.followup.send(msg_text)
             return
 
-        view: ZeroDayPanel = ZeroDayPanel(
+        view = ZeroDayPanel(
+            guild_id=interaction.guild_id,
             query=search,
             initial_results=result,
             current_page=1,
-            lang=lang,
-            translations=view_translations,
         )
+        await view.init_ui()
 
-        msg: discord.WebhookMessage = await interaction.followup.send(view=view)
+        msg = await interaction.followup.send(view=view)
         view.message = msg
 
 
