@@ -10,33 +10,35 @@ from ui import ZeroDayPanel
 
 class ZerodayCog(commands.Cog):
 
-    def __init__(self, bot):
-        self.bot = bot
+    def __init__(self, bot: commands.Bot) -> None:
+        self.bot: commands.Bot = bot
 
     @app_commands.command(
         name="zerodaytoday", description="Search exploits on 0daytoday"
     )
     @app_commands.guild_only()
     @app_commands.describe(search="Search query (free text or CVE)")
-    async def send_zeroday(self, interaction, search):
+    async def send_zeroday(
+        self, interaction: discord.Interaction, search: str
+    ) -> None:
         await interaction.response.defer(thinking=True)
-        search = search.strip()
+        search: str = search.strip()
 
-        lang = await lang_db.get_language(interaction.guild_id)
+        lang: str = await lang_db.get_language(interaction.guild_id)
 
         try:
-            cog_translations = await load_command_translation(
+            cog_translations: dict = await load_command_translation(
                 "zerodaycog", lang, "cog"
             )
-            view_translations = await load_command_translation(
+            view_translations: dict = await load_command_translation(
                 "zerodaycog", lang, "view"
             )
         except Exception:
-            cog_translations = {}
-            view_translations = {}
+            cog_translations: dict = {}
+            view_translations: dict = {}
 
         if len(search) < 3:
-            msg_short = cog_translations.get(
+            msg_short: str = cog_translations.get(
                 "err_too_short",
                 "❌ Search query too short (minimum 3 characters).",
             )
@@ -49,7 +51,7 @@ class ZerodayCog(commands.Cog):
             result = None
 
         if not result:
-            not_found_tpl = cog_translations.get(
+            not_found_tpl: str = cog_translations.get(
                 "not_found",
                 "🔍 No zero-day found for `{search}`.",
             )
@@ -58,7 +60,7 @@ class ZerodayCog(commands.Cog):
             )
             return
 
-        view = ZeroDayPanel(
+        view: ZeroDayPanel = ZeroDayPanel(
             query=search,
             initial_results=result,
             current_page=1,
@@ -66,9 +68,9 @@ class ZerodayCog(commands.Cog):
             translations=view_translations,
         )
 
-        msg = await interaction.followup.send(view=view)
+        msg: discord.WebhookMessage = await interaction.followup.send(view=view)
         view.message = msg
 
 
-async def setup(bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(ZerodayCog(bot))
