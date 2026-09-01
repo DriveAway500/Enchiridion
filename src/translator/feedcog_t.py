@@ -57,3 +57,9 @@ MESSAGES = {
         },
     },
 }
+
+async def feedcog_translate(guild_id, *keys, **kwargs):
+    result = MESSAGES[await lang_db.get_language(guild_id, default="EN")]
+    for key in keys:
+        result = result[key]
+    return result.format(**kwargs)

@@ -2,6 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from translator import feedcog_translate
 from database import feed_db 
 from feeds import process_feeds_once
 
@@ -11,7 +12,6 @@ SEVERITY_CHOICES = [
     app_commands.Choice(name="Medium (4.0+)", value=4.0),
     app_commands.Choice(name="All (includes unknown severity)", value=0.0),
 ]
-
 
 class FeedConfigCog(commands.Cog):
 
@@ -48,7 +48,7 @@ class FeedConfigCog(commands.Cog):
                 reason="Vulnerability feed registration via /feeds register",
             )
         except discord.Forbidden:
-            message = await translate(
+            message = await feedcog_translate(
                 interaction.guild_id,
                 "errors",
                 "no_webhook_permission",
@@ -57,7 +57,7 @@ class FeedConfigCog(commands.Cog):
             await interaction.response.send_message(message, ephemeral=True)
             return
         except discord.HTTPException as error:
-            message = await translate(
+            message = await feedcog_translate(
                 interaction.guild_id,
                 "errors",
                 "webhook_creation_failed",
@@ -75,7 +75,7 @@ class FeedConfigCog(commands.Cog):
             webhook_url=webhook.url,
         )
 
-        message = await translate(
+        message = await feedcog_translate(
             interaction.guild_id,
             "success",
             "registered",
@@ -101,7 +101,7 @@ class FeedConfigCog(commands.Cog):
     ):
         subscriptions = await feed_db.list_subscriptions_for_guild(interaction.guild_id)
         if not any(sub.channel_id == channel.id for sub in subscriptions):
-            message = await translate(
+            message = await feedcog_translate(
                 interaction.guild_id,
                 "errors",
                 "channel_not_registered",
@@ -117,7 +117,7 @@ class FeedConfigCog(commands.Cog):
             allow_unknown=include_unknown,
         )
 
-        message = await translate(
+        message = await feedcog_translate(
             interaction.guild_id,
             "success",
             "severity_updated",
@@ -145,7 +145,7 @@ class FeedConfigCog(commands.Cog):
             channel_id=channel.id,
         )
 
-        message = await translate(
+        message = await feedcog_translate(
             interaction.guild_id,
             "success",
             "removed",
@@ -159,20 +159,20 @@ class FeedConfigCog(commands.Cog):
         subscriptions = await feed_db.list_subscriptions_for_guild(interaction.guild_id)
 
         if not subscriptions:
-            message = await translate(interaction.guild_id, "errors", "no_channels_registered")
+            message = await feedcog_translate(interaction.guild_id, "errors", "no_channels_registered")
             await interaction.response.send_message(message, ephemeral=True)
             return
 
         lines = []
-        text_yes = await translate(interaction.guild_id, "ui", "yes")
-        text_no = await translate(interaction.guild_id, "ui", "no")
+        text_yes = await feedcog_translate(interaction.guild_id, "ui", "yes")
+        text_no = await feedcog_translate(interaction.guild_id, "ui", "no")
 
         for subscription in subscriptions:
             channel = interaction.guild.get_channel(subscription.channel_id)
             if channel:
                 channel_name = channel.mention
             else:
-                channel_name = await translate(
+                channel_name = await feedcog_translate(
                     interaction.guild_id,
                     "errors",
                     "channel_not_found",
@@ -181,7 +181,7 @@ class FeedConfigCog(commands.Cog):
 
             unknown_status = text_yes if subscription.allow_unknown else text_no
             
-            line = await translate(
+            line = await feedcog_translate(
                 interaction.guild_id,
                 "ui",
                 "list_line",
