@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from database import lang_db
-from translations import langcog_translate
+from translator import langcog_translate
 
 LANGUAGE_CHOICES = [
     app_commands.Choice(name="Português (Brasil)", value="PTBR"),

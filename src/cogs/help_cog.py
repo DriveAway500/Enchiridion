@@ -2,7 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from translations import helpcog_translate
+from translator import helpcog_translate
 
 
 class HelpCog(commands.Cog):
