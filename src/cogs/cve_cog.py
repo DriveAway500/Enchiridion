@@ -8,13 +8,13 @@ class CveCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="cve", description="Pesquisar CVE ou pacote afetado")
+    @app_commands.command(name="cve", description="Search by CVE or affected package")
     @app_commands.guild_only()
-    @app_commands.describe(method="O método de pesquisa")
+    @app_commands.describe(method="Search method")
     @app_commands.choices(
         method=[
             app_commands.Choice(name="CVE ID", value="cve"),
-            app_commands.Choice(name="Nome do pacote", value="package"),
+            app_commands.Choice(name="Package Name", value="package"),
         ]
     )
     async def send_cve(
