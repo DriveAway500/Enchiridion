@@ -11,6 +11,7 @@ EXTENSIONS = (
     "cogs.help_cog",
     "cogs.feed_cog",
     "cogs.lang_cog",
+    "cogs.test_cog"
 )
 
 class EnchiridionBot(commands.Bot):
