@@ -1,6 +1,7 @@
 import io
 import json
 import discord
+from discord import app_commands
 from discord.ext import commands
 
 from graph import CVSSRadarChartGenerator
@@ -9,19 +10,16 @@ from graph import CVSSRadarChartGenerator
 class CVSSChartCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.generator = None
-
-    async def cog_load(self):
-        # Inicializa o gerador junto com o pool de processos
         self.generator = CVSSRadarChartGenerator()
 
-    async def cog_unload(self):
-        # Encerra o executor e libera os recursos dos workers
-        if self.generator:
-            self.generator.close()
+    @app_commands.command(
+        name="cvss",
+        description="Gera o gráfico de radar para métricas CVSS.",
+    )
+    @app_commands.guild_only()
+    async def render_cvss_chart(self, interaction: discord.Interaction):
+        await interaction.response.defer()
 
-    @commands.command(name="cvss")
-    async def render_cvss_chart(self, ctx: commands.Context):
         raw_json = """{
             "id": "CVE-2026-1444",
             "sourceIdentifier": "cna@vuldb.com",
@@ -60,28 +58,26 @@ class CVSSChartCog(commands.Cog):
         }"""
 
         try:
-            # Converte e valida a entrada de dados
             data = json.loads(raw_json)
-
-            # Executa a geração no pool de processos sem bloquear o loop do bot
             cve_id, img_bytes = await self.generator.generate_chart(data)
 
-            # Prepara o arquivo para o envio via Discord
             with io.BytesIO(img_bytes) as image_binary:
-                file = discord.File(
-                    fp=image_binary, filename=f"{cve_id}_radar.png"
-                )
+                filename = f"{cve_id}_radar.png"
+                file = discord.File(fp=image_binary, filename=filename)
 
                 embed = discord.Embed(
                     title=f"Relatório de Métricas — {cve_id}",
                     color=discord.Color.red(),
                 )
-                embed.set_image(url=f"attachment://{cve_id}_radar.png")
+                embed.set_image(url=f"attachment://{filename}")
 
-                await ctx.send(embed=embed, file=file)
+                await interaction.followup.send(embed=embed, file=file)
 
         except Exception as err:
-            await ctx.send(f"Erro ao processar o gráfico CVSS: `{err}`")
+            await interaction.followup.send(
+                f"Erro ao processar o gráfico CVSS: `{err}`",
+                ephemeral=True,
+            )
 
 
 async def setup(bot: commands.Bot):

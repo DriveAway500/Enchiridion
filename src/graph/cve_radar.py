@@ -1,16 +1,3 @@
-"""
-Optimized CVSS radar chart generator for high throughput (e.g. a Discord bot).
-
-Usage:
-
-    gen = CVSSRadarChartGenerator()
-    cve_id, png_bytes = await gen.generate_chart(json_data)
-    # ...
-    results = await gen.generate_batch(list_of_json_items)
-    # ...
-    gen.close()  # when shutting down the application
-"""
-
 import io
 import json
 import asyncio
@@ -47,12 +34,6 @@ CATEGORIES = [
 _NUM_VARS = len(CATEGORIES)
 _ANGLES = np.linspace(0, 2 * np.pi, _NUM_VARS, endpoint=False).tolist()
 _ANGLES = _ANGLES + _ANGLES[:1]
-
-# ---------------------------------------------------------------------------
-# Per-worker-process state — each process in the pool has its own copy,
-# created once in _init_worker and reused for every subsequent call made
-# to that process.
-# ---------------------------------------------------------------------------
 
 _worker_state = {}
 
@@ -186,5 +167,4 @@ class CVSSRadarChartGenerator:
         return output
 
     def close(self):
-        """Call this when shutting down the application to tear down the worker processes."""
         self._executor.shutdown(wait=True)

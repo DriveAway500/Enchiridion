@@ -1,10 +1,16 @@
+import io
 import discord
 from discord import ui
 
 from omega_api import get_cve, search_cves_by_package
 from translator import cvecog_translate
+# Assuming CVSSRadarChartGenerator is saved in chart_generator.py
+from graph import CVSSRadarChartGenerator
 
 PAGE_SIZE = 5
+
+# Global chart generator instance to reuse worker processes efficiently
+chart_generator = CVSSRadarChartGenerator()
 
 
 class CVEDetailView(ui.LayoutView):
@@ -12,10 +18,12 @@ class CVEDetailView(ui.LayoutView):
     def __init__(
         self,
         cve_data: dict,
+        chart_file: discord.File | None = None,
         guild_id: int | None = None,
     ) -> None:
         super().__init__(timeout=180)
         self.cve_data = cve_data
+        self.chart_file = chart_file
         self.guild_id = guild_id
         self.message = None
 
@@ -75,6 +83,13 @@ class CVEDetailView(ui.LayoutView):
             self.guild_id, "detail_view", "details_title", cve_id=cve_id
         )
         container.add_item(ui.TextDisplay(title_text))
+
+        # Add the radar chart attachment to Media Gallery if available
+        if self.chart_file:
+            media_gallery = ui.MediaGallery(
+                discord.MediaGalleryItem(self.chart_file)
+            )
+            container.add_item(media_gallery)
 
         lbl_status = await cvecog_translate(self.guild_id, "detail_view", "status")
         lbl_published = await cvecog_translate(
@@ -159,21 +174,40 @@ class CVEButton(ui.Button):
             )
             return
 
+        # Generate the radar chart using the generator
+        chart_file = None
+        try:
+            _, image_bytes = await chart_generator.generate_chart(data)
+            chart_file = discord.File(
+                fp=io.BytesIO(image_bytes),
+                filename=f"cvss_{self.cve_id}.png"
+            )
+        except Exception as err:
+            print(f"Failed to generate CVSS radar chart for {self.cve_id}: {err}")
+
         detail_view = CVEDetailView(
             cve_data=data,
+            chart_file=chart_file,
             guild_id=interaction.guild_id,
         )
         await detail_view.init_ui()
 
+        # Build attachments list for discord API call
+        attachments = [chart_file] if chart_file else []
+
         if hasattr(self.view, "detail_message") and self.view.detail_message:
             try:
-                await self.view.detail_message.edit(view=detail_view)
+                await self.view.detail_message.edit(view=detail_view, attachments=attachments)
                 detail_view.message = self.view.detail_message
                 return
             except (discord.NotFound, discord.HTTPException):
                 self.view.detail_message = None
 
-        msg = await interaction.followup.send(view=detail_view, wait=True)
+        msg = await interaction.followup.send(
+            view=detail_view,
+            files=attachments,
+            wait=True
+        )
         detail_view.message = msg
         if hasattr(self.view, "detail_message"):
             self.view.detail_message = msg
