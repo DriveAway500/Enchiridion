@@ -4,13 +4,12 @@ from discord import ui
 
 from omega_api import get_cve, search_cves_by_package
 from translator import cvecog_translate
-# Assuming CVSSRadarChartGenerator is saved in chart_generator.py
-from graph import CVSSRadarChartGenerator
+from graph import CVSSRadar
 
 PAGE_SIZE = 5
 
-# Global chart generator instance to reuse worker processes efficiently
-chart_generator = CVSSRadarChartGenerator()
+# Global chart service instance to generate radar charts
+chart_service = CVSSRadar()
 
 
 class CVEDetailView(ui.LayoutView):
@@ -18,14 +17,13 @@ class CVEDetailView(ui.LayoutView):
     def __init__(
         self,
         cve_data: dict,
-        chart_file: discord.File | None = None,
         guild_id: int | None = None,
     ) -> None:
         super().__init__(timeout=180)
         self.cve_data = cve_data
-        self.chart_file = chart_file
         self.guild_id = guild_id
         self.message = None
+        self.chart_file: discord.File | None = None
 
     async def init_ui(self) -> None:
         await self.build_ui()
@@ -77,6 +75,18 @@ class CVEDetailView(ui.LayoutView):
             score_info = f"`{cvss.get('baseScore', 'N/A')}` (**{cvss.get('baseSeverity', 'N/A')}** - CVSS v3.1)"
             vector_str = cvss.get("vectorString", "N/A")
 
+        # Gera o gráfico radar de CVSS diretamente aqui na view, em memória
+        # (sem salvar em disco e sem links, usando BytesIO + discord.File)
+        self.chart_file = None
+        try:
+            _, image_bytes = await chart_service.generate_single(data)
+            self.chart_file = discord.File(
+                fp=io.BytesIO(image_bytes),
+                filename=f"cvss_{cve_id}.png",
+            )
+        except Exception as err:
+            print(f"Failed to generate CVSS radar chart for {cve_id}: {err}")
+
         container = ui.Container()
 
         title_text = await cvecog_translate(
@@ -84,7 +94,7 @@ class CVEDetailView(ui.LayoutView):
         )
         container.add_item(ui.TextDisplay(title_text))
 
-        # Add the radar chart attachment to Media Gallery if available
+        # Adiciona o gráfico gerado à Media Gallery, se disponível
         if self.chart_file:
             media_gallery = ui.MediaGallery(
                 discord.MediaGalleryItem(self.chart_file)
@@ -174,26 +184,15 @@ class CVEButton(ui.Button):
             )
             return
 
-        # Generate the radar chart using the generator
-        chart_file = None
-        try:
-            _, image_bytes = await chart_generator.generate_chart(data)
-            chart_file = discord.File(
-                fp=io.BytesIO(image_bytes),
-                filename=f"cvss_{self.cve_id}.png"
-            )
-        except Exception as err:
-            print(f"Failed to generate CVSS radar chart for {self.cve_id}: {err}")
-
+        # A view agora é responsável por gerar seu próprio gráfico
         detail_view = CVEDetailView(
             cve_data=data,
-            chart_file=chart_file,
             guild_id=interaction.guild_id,
         )
         await detail_view.init_ui()
 
-        # Build attachments list for discord API call
-        attachments = [chart_file] if chart_file else []
+        # Lista de anexos construída a partir do arquivo gerado pela própria view
+        attachments = [detail_view.chart_file] if detail_view.chart_file else []
 
         if hasattr(self.view, "detail_message") and self.view.detail_message:
             try:

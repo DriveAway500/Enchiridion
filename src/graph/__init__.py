@@ -1,1 +1,1 @@
-from .cve_radar import CVSSRadarChartGenerator
+from .cve_radar import CVSSRadar

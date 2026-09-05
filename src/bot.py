@@ -5,12 +5,12 @@ from discord.ext import commands
 from feeds import setup_feed_task
 
 EXTENSIONS = (
-    "cogs.exploit_cog",
+    # "cogs.exploit_cog",
     "cogs.cve_cog",
-    "cogs.zeroday_cog",
+    # "cogs.zeroday_cog",
     "cogs.help_cog",
-    "cogs.feed_cog",
-    "cogs.lang_cog",
+    # "cogs.feed_cog",
+    # "cogs.lang_cog",
     "cogs.test_cog"
 )
 

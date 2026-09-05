@@ -224,8 +224,11 @@ class CVEIdSearchModal(ui.Modal):
         )
         await detail_view.init_ui()
 
+        attachments = [detail_view.chart_file] if detail_view.chart_file else []
+
         msg = await interaction.followup.send(
             view=detail_view,
+            files=attachments,
             wait=True,
         )
         detail_view.message = msg

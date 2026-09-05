@@ -4,20 +4,24 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from graph import CVSSRadarChartGenerator
+# Updated import to match the new service class and filename
+from graph import CVSSRadar
 
 
 class CVSSChartCog(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    """Discord cog responsible for rendering CVSS radar charts."""
+
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-        self.generator = CVSSRadarChartGenerator()
+        # Initialize the chart generator service
+        self.service = CVSSRadar(width=600, height=600)
 
     @app_commands.command(
         name="cvss",
         description="Gera o gráfico de radar para métricas CVSS.",
     )
     @app_commands.guild_only()
-    async def render_cvss_chart(self, interaction: discord.Interaction):
+    async def render_cvss_chart(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
 
         raw_json = """{
@@ -58,8 +62,8 @@ class CVSSChartCog(commands.Cog):
         }"""
 
         try:
-            data = json.loads(raw_json)
-            cve_id, img_bytes = await self.generator.generate_chart(data)
+            # Use the new async method generate_single to process raw_json
+            cve_id, img_bytes = await self.service.generate_single(raw_json)
 
             with io.BytesIO(img_bytes) as image_binary:
                 filename = f"{cve_id}_radar.png"
@@ -80,5 +84,5 @@ class CVSSChartCog(commands.Cog):
             )
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(CVSSChartCog(bot))
