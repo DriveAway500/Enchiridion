@@ -17,4 +17,4 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 tiny-skia = "0.11"
 tokio = { version = "1.53.1", features = ["full"] }
-usvg = "0.37"
+usvg = { version = "0.37.0", features = ["text"] }
