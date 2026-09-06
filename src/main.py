@@ -10,7 +10,9 @@ load_dotenv(dotenv_path=env_path)
 
 DEV=False
 
-if DEV:
-    enchiridion_run(os.getenv("DEV_TOKEN"))
-else:
-    enchiridion_run(os.getenv("DISCORD_TOKEN"))
+
+if __name__ == "__main__":
+    if DEV:
+        enchiridion_run(os.getenv("DEV_TOKEN"))
+    else:
+        enchiridion_run(os.getenv("DISCORD_TOKEN"))

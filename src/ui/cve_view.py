@@ -1,10 +1,15 @@
+import io
 import discord
 from discord import ui
 
 from omega_api import get_cve, search_cves_by_package
 from translator import cvecog_translate
+from graph import CVSSRadar
 
 PAGE_SIZE = 5
+
+# Global chart service instance to generate radar charts
+chart_service = CVSSRadar()
 
 
 class CVEDetailView(ui.LayoutView):
@@ -18,6 +23,7 @@ class CVEDetailView(ui.LayoutView):
         self.cve_data = cve_data
         self.guild_id = guild_id
         self.message = None
+        self.chart_file: discord.File | None = None
 
     async def init_ui(self) -> None:
         await self.build_ui()
@@ -69,12 +75,31 @@ class CVEDetailView(ui.LayoutView):
             score_info = f"`{cvss.get('baseScore', 'N/A')}` (**{cvss.get('baseSeverity', 'N/A')}** - CVSS v3.1)"
             vector_str = cvss.get("vectorString", "N/A")
 
+        # Gera o gráfico radar de CVSS diretamente aqui na view, em memória
+        # (sem salvar em disco e sem links, usando BytesIO + discord.File)
+        self.chart_file = None
+        try:
+            _, image_bytes = await chart_service.generate_single(data)
+            self.chart_file = discord.File(
+                fp=io.BytesIO(image_bytes),
+                filename=f"cvss_{cve_id}.png",
+            )
+        except Exception as err:
+            print(f"Failed to generate CVSS radar chart for {cve_id}: {err}")
+
         container = ui.Container()
 
         title_text = await cvecog_translate(
             self.guild_id, "detail_view", "details_title", cve_id=cve_id
         )
         container.add_item(ui.TextDisplay(title_text))
+
+        # Adiciona o gráfico gerado à Media Gallery, se disponível
+        if self.chart_file:
+            media_gallery = ui.MediaGallery(
+                discord.MediaGalleryItem(self.chart_file)
+            )
+            container.add_item(media_gallery)
 
         lbl_status = await cvecog_translate(self.guild_id, "detail_view", "status")
         lbl_published = await cvecog_translate(
@@ -159,21 +184,29 @@ class CVEButton(ui.Button):
             )
             return
 
+        # A view agora é responsável por gerar seu próprio gráfico
         detail_view = CVEDetailView(
             cve_data=data,
             guild_id=interaction.guild_id,
         )
         await detail_view.init_ui()
 
+        # Lista de anexos construída a partir do arquivo gerado pela própria view
+        attachments = [detail_view.chart_file] if detail_view.chart_file else []
+
         if hasattr(self.view, "detail_message") and self.view.detail_message:
             try:
-                await self.view.detail_message.edit(view=detail_view)
+                await self.view.detail_message.edit(view=detail_view, attachments=attachments)
                 detail_view.message = self.view.detail_message
                 return
             except (discord.NotFound, discord.HTTPException):
                 self.view.detail_message = None
 
-        msg = await interaction.followup.send(view=detail_view, wait=True)
+        msg = await interaction.followup.send(
+            view=detail_view,
+            files=attachments,
+            wait=True
+        )
         detail_view.message = msg
         if hasattr(self.view, "detail_message"):
             self.view.detail_message = msg
