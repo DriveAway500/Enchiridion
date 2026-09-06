@@ -33,8 +33,8 @@ class EnchiridionBot(commands.Bot):
         synced = await self.tree.sync()
         print(f"SYNCHRONIZED {len(synced)} GLOBAL TREE COMMANDS.")
 
-        # self.feed_task = setup_feed_task(self)
-        # self.feed_task.start()
+        self.feed_task = setup_feed_task(self)
+        self.feed_task.start()
 
     async def close(self):
         if self.feed_task and self.feed_task.is_running():

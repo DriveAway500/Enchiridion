@@ -8,7 +8,7 @@ base_path = Path(__file__).resolve().parent
 env_path = base_path.parent / '.env'
 load_dotenv(dotenv_path=env_path)
 
-DEV=True
+DEV=False
 
 
 if __name__ == "__main__":
