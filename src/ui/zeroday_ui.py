@@ -1,4 +1,5 @@
 import io
+from typing import cast
 
 import discord
 from discord import ui
@@ -23,10 +24,12 @@ class ExploitButton(ui.Button):
     async def callback(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
 
+        panel_view = cast(ZeroDayPanel, self.view)
+
         data = await get_zeroday_exploit(self.exploit_id)
         if not data or "code" not in data:
             error_msg = await zerodaycog_translate(
-                self.view.guild_id, "errors", "load_failed"
+                panel_view.guild_id, "errors", "load_failed"
             )
             await interaction.followup.send(
                 error_msg,
@@ -44,7 +47,6 @@ class ExploitButton(ui.Button):
         code_block = f"```{file_extension}\n{code}\n```"
         message_content = f"{title_header}{code_block}"
 
-        panel_view = self.view
         file_obj = None
 
         if len(message_content) > 2000:
@@ -72,14 +74,22 @@ class ExploitButton(ui.Button):
             except discord.NotFound:
                 panel_view.active_code_message = None
 
+        channel = interaction.channel
+        if not isinstance(channel, (discord.TextChannel, discord.VoiceChannel, discord.StageChannel, discord.Thread,
+                                    discord.DMChannel, discord.GroupChannel)):
+            return
+
+        if interaction.message is None:
+            return
+
         if file_obj:
-            msg = await interaction.channel.send(
+            msg = await channel.send(
                 content=message_content,
                 file=file_obj,
                 reference=interaction.message,
             )
         else:
-            msg = await interaction.channel.send(
+            msg = await channel.send(
                 content=message_content,
                 reference=interaction.message,
             )

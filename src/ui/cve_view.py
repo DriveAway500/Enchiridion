@@ -2,7 +2,7 @@ import io
 import discord
 from discord import ui
 
-from omega_api import get_cve, search_cves_by_package
+from omega_api import get_cve, search_cve_by_package
 from translator import cvecog_translate
 from graph import CVSSRadar
 
@@ -75,8 +75,6 @@ class CVEDetailView(ui.LayoutView):
             score_info = f"`{cvss.get('baseScore', 'N/A')}` (**{cvss.get('baseSeverity', 'N/A')}** - CVSS v3.1)"
             vector_str = cvss.get("vectorString", "N/A")
 
-        # Gera o gráfico radar de CVSS diretamente aqui na view, em memória
-        # (sem salvar em disco e sem links, usando BytesIO + discord.File)
         self.chart_file = None
         try:
             _, image_bytes = await chart_service.generate_single(data)
@@ -94,7 +92,6 @@ class CVEDetailView(ui.LayoutView):
         )
         container.add_item(ui.TextDisplay(title_text))
 
-        # Adiciona o gráfico gerado à Media Gallery, se disponível
         if self.chart_file:
             media_gallery = ui.MediaGallery(
                 discord.MediaGalleryItem(self.chart_file)
@@ -184,14 +181,12 @@ class CVEButton(ui.Button):
             )
             return
 
-        # A view agora é responsável por gerar seu próprio gráfico
         detail_view = CVEDetailView(
             cve_data=data,
             guild_id=interaction.guild_id,
         )
         await detail_view.init_ui()
 
-        # Lista de anexos construída a partir do arquivo gerado pela própria view
         attachments = [detail_view.chart_file] if detail_view.chart_file else []
 
         if hasattr(self.view, "detail_message") and self.view.detail_message:
@@ -396,7 +391,7 @@ class CVEPanel(ui.LayoutView):
 
     async def update_page(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
-        results = await search_cves_by_package(
+        results = await search_cve_by_package(
             package_name=self.package_name,
             year=self.year,
             severity=self.severity,

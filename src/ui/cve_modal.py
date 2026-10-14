@@ -3,7 +3,7 @@ import traceback
 import discord
 from discord import ui
 
-from omega_api import get_cve, search_cves_by_package
+from omega_api import get_cve, search_cve_by_package
 from translator import cvecog_translate
 
 from .cve_view import CVEDetailView, CVEPanel
@@ -107,7 +107,7 @@ class CVEPackageSearchModal(ui.Modal):
         score_range = self.score.component.values[0]
         selected_year = self.year.component.values[0]
 
-        results = await search_cves_by_package(
+        results = await search_cve_by_package(
             package_name=package,
             year=selected_year,
             severity=score_range,

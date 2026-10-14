@@ -4,3 +4,5 @@ httpx
 aiosqlite
 feedparser
 aiofiles
+maturin
+python-dotenv

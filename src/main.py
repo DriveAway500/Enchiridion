@@ -10,7 +10,6 @@ load_dotenv(dotenv_path=env_path)
 
 DEV=False
 
-
 if __name__ == "__main__":
     if DEV:
         enchiridion_run(os.getenv("DEV_TOKEN"))

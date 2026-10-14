@@ -33,8 +33,8 @@ class EnchiridionBot(commands.Bot):
         synced = await self.tree.sync()
         print(f"SYNCHRONIZED {len(synced)} GLOBAL TREE COMMANDS.")
 
-        self.feed_task = setup_feed_task(self)
-        self.feed_task.start()
+        #self.feed_task = setup_feed_task(self)
+        #self.feed_task.start()
 
     async def close(self):
         if self.feed_task and self.feed_task.is_running():
@@ -44,7 +44,7 @@ class EnchiridionBot(commands.Bot):
         await super().close()
 
     async def on_ready(self):
-        activity = discord.CustomActivity(name="Procurando Exploits...")
+        activity = discord.CustomActivity(name="Searching Exploits...")
         await self.change_presence(status=discord.Status.online, activity=activity)
         print(f"BOT CONNECTED AS: {self.user}")
 

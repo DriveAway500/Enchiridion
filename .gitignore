@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+#envyroment related
+.idea
+
 #databases
 *.db
 
