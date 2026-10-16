@@ -2,6 +2,7 @@ import aiohttp
 import discord
 from discord.ext import commands
 
+from httpx_client import lifespan # importing this just to close connection
 from feeds import setup_feed_task
 
 EXTENSIONS = (
@@ -32,10 +33,12 @@ class EnchiridionBot(commands.Bot):
         synced = await self.tree.sync()
         print(f"SYNCHRONIZED {len(synced)} GLOBAL TREE COMMANDS.")
 
-        #self.feed_task = setup_feed_task(self)
-        #self.feed_task.start()
+        self.feed_task = setup_feed_task(self)
+        self.feed_task.start()
 
     async def close(self):
+        lifespan() # I'm testing this for closing connections
+
         if self.feed_task and self.feed_task.is_running():
             self.feed_task.cancel()
         if self.webhook_session:

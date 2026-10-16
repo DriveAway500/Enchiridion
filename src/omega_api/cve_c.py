@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .httpx_client import request_json
+from httpx_client import request_json
 
 
 @dataclass

@@ -1,11 +1,13 @@
 import asyncio
-import traceback
+import logging
 
 import discord
 from discord.ext import tasks
 
 from .cve_spider import CVEClassifier
 from database import feed_db
+
+logger = logging.getLogger(__name__)
 
 MAX_CONCURRENT_SENDS = 20
 
@@ -26,7 +28,7 @@ def _matches_filter(item, sub):
 
 
 async def _send_to_subscription(session, sub, item):
-    """Envia via webhook. Retorna (enviado_com_sucesso, webhook_sumiu)."""
+    """Send via webhook. Returns (sent_successfully, webhook_gone)."""
     if not sub.webhook_url:
         return False, False
 
@@ -36,13 +38,19 @@ async def _send_to_subscription(session, sub, item):
         await asyncio.wait_for(webhook.send(embed=embed), timeout=10)
         return True, False
     except asyncio.TimeoutError:
-        print(f"Timeout ao enviar item {item.id} para canal {sub.channel_id}")
+        logger.warning("Timeout sending item %s to channel %s", item.id, sub.channel_id)
         return False, False
     except discord.NotFound:
-        print(f"Webhook do canal {sub.channel_id} (servidor {sub.guild_id}) não existe mais - removendo inscrição.")
+        logger.warning(
+            "Webhook for channel %s (guild %s) no longer exists - removing subscription",
+            sub.channel_id,
+            sub.guild_id,
+        )
         return False, True
-    except discord.DiscordException as e:
-        print(f"Falha ao enviar item {item.id} para canal {sub.channel_id}: {e}")
+    except discord.DiscordException:
+        logger.warning(
+            "Failed to send item %s to channel %s", item.id, sub.channel_id, exc_info=True
+        )
         return False, False
 
 
@@ -57,13 +65,15 @@ async def process_feeds_once(bot, classifier):
 
     items = await classifier.fetch_and_classify()
     stats["items_found"] = len(items)
-    print(f"[feeds] ciclo: {len(items)} item(ns) novo(s) encontrado(s) no total")
+    logger.info("Feed cycle: %d new item(s) found in total", len(items))
     if not items:
         return stats
 
     subscriptions = await feed_db.list_subscriptions()
     stats["subscriptions"] = len(subscriptions)
-    print(f"[feeds] ciclo: {len(subscriptions)} inscrição(ões) registrada(s) (em todos os servidores)")
+    logger.info(
+        "Feed cycle: %d subscription(s) registered (across all guilds)", len(subscriptions)
+    )
 
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_SENDS)
 
@@ -74,26 +84,30 @@ async def process_feeds_once(bot, classifier):
     for item in items:
         matching_subs = [s for s in subscriptions if _matches_filter(item, s)]
         stats["matched"] += len(matching_subs)
-        print(
-            f"[feeds] item {item.id} ({item.severity_label}, score={item.severity_score}) "
-            f"-> {len(matching_subs)} canal(is) correspondente(s)"
+        logger.debug(
+            "Item %s (%s, score=%s) -> %d matching channel(s)",
+            item.id,
+            item.severity_label,
+            item.severity_score,
+            len(matching_subs),
         )
 
         if not matching_subs:
             continue
 
-        resultados = await asyncio.gather(*(_send_with_limit(sub, item) for sub in matching_subs))
+        results = await asyncio.gather(*(_send_with_limit(sub, item) for sub in matching_subs))
 
-        for sub, (ok, webhook_sumiu) in zip(matching_subs, resultados):
+        for sub, (ok, webhook_gone) in zip(matching_subs, results):
             if ok:
                 stats["sent_ok"] += 1
             else:
                 stats["sent_failed"] += 1
-                if webhook_sumiu:
+                if webhook_gone:
                     await feed_db.remove_subscription(sub.guild_id, sub.channel_id)
 
         await feed_db.mark_sent(item.id)
 
+    logger.info("Feed cycle finished: %s", stats)
     return stats
 
 
@@ -105,9 +119,8 @@ def setup_feed_task(bot, interval_seconds=7200):
     async def feed_task():
         try:
             await process_feeds_once(bot, classifier)
-        except Exception as e:
-            print(f"Erro ao processar o ciclo de feeds: {e}")
-            traceback.print_exc()
+        except Exception:
+            logger.exception("Error while processing feed cycle")
 
     @feed_task.before_loop
     async def before_feed_task():
@@ -115,7 +128,8 @@ def setup_feed_task(bot, interval_seconds=7200):
 
     @feed_task.error
     async def feed_task_error(error):
-        print(f"FEED TASK CRASHOU: {error}")
-        traceback.print_exception(type(error), error, error.__traceback__)
+        logger.critical(
+            "Feed task crashed: %s", error, exc_info=(type(error), error, error.__traceback__)
+        )
 
     return feed_task

@@ -54,7 +54,6 @@ class FeedDatabase:
             )
             await db.commit()
             self._initialized = True
-            print(f"[db] usando banco de dados em: {self.db_path}")
 
     async def add_subscription(
         self,

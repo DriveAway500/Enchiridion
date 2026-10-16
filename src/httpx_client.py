@@ -5,9 +5,18 @@ from typing import Any, AsyncGenerator
 
 import httpx
 
-from .exceptions import APIError, NotFoundError
-
 BASE_URL = "http://127.0.0.1:3000"
+
+class APIError(Exception):
+
+    def __init__(self, status_code: int, detail: str):
+        self.status_code = status_code
+        self.detail = detail
+        super().__init__(f"API error {status_code}: {detail}")
+
+
+class NotFoundError(APIError):
+    """NOT FOUND RECURSE (HTTP 404)."""
 
 HEADERS = {
     "User-Agent": (
@@ -76,3 +85,11 @@ async def request_json(
         return None
 
     return response.json()
+
+
+# this stupid thing is basically just bcs of feeds/cve_spider.py
+def get_http_client(timeout: float = 15.0) -> httpx.AsyncClient:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/119.0"
+    }
+    return httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=timeout)

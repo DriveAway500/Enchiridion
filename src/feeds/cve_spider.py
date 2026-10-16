@@ -1,10 +1,15 @@
+import logging
 import re
-import traceback
 from dataclasses import dataclass
 
 import feedparser
 
-from .httpx_client import get_http_client
+from httpx_client import get_http_client
+
+logger = logging.getLogger(__name__)
+
+# NOTE: the name CVEClassifier is a bit misleading - it is not just a classifier,
+# it also actively fetches entries from the RSS/Atom feeds. Kept for now.
 
 
 @dataclass
@@ -22,8 +27,8 @@ class VulnerabilityData:
 class CVEClassifier:
     def __init__(self, is_sent_checker, feeds=None):
         """
-        :param is_sent_checker: Função assíncrona que recebe o ID do item (str)
-                                 e retorna True se ele já existir na database.
+        :param is_sent_checker: Async function that receives the item ID (str)
+                                and returns True if it already exists in the database.
         """
         self.is_sent_checker = is_sent_checker
         self.feeds = feeds or ["https://cvefeed.io/rssfeed/latest.atom"]
@@ -69,24 +74,26 @@ class CVEClassifier:
         async with get_http_client() as client:
             for url in self.feeds:
                 try:
-                    print(f"[feeds] buscando {url}")
+                    logger.debug("Fetching %s", url)
                     response = await client.get(url)
                     if response.status_code != 200:
-                        print(f"[feeds] erro ao acessar {url}: status {response.status_code}")
+                        logger.error(
+                            "Failed to fetch %s: status %s", url, response.status_code
+                        )
                         continue
 
                     body = response.text
                     feed = feedparser.parse(body)
-                    print(f"[feeds] {url}: {len(feed.entries)} entrada(s) no feed")
+                    logger.debug("%s: %d entry(ies) in feed", url, len(feed.entries))
 
-                    ja_enviados = 0
-                    descartados_sem_label = 0
+                    already_sent = 0
+                    discarded_no_label = 0
 
                     for entry in reversed(feed.entries):
                         item_id = getattr(entry, "id", entry.link)
 
                         if await self.is_sent_checker(item_id):
-                            ja_enviados += 1
+                            already_sent += 1
                             continue
 
                         title = entry.title
@@ -98,7 +105,7 @@ class CVEClassifier:
                         label, color = self.classify_severity(severity_score)
 
                         if label is None:
-                            descartados_sem_label += 1
+                            discarded_no_label += 1
                             continue
 
                         thumbnail = None
@@ -118,14 +125,16 @@ class CVEClassifier:
 
                         classified_items.append(item_data)
 
-                    print(
-                        f"[feeds] {url}: {ja_enviados} já enviado(s) antes, "
-                        f"{descartados_sem_label} sem severidade classificável, "
-                        f"{len(classified_items)} novo(s) pronto(s) para envio"
+                    logger.info(
+                        "%s: %d already sent, %d without classifiable severity, "
+                        "%d new item(s) ready to send",
+                        url,
+                        already_sent,
+                        discarded_no_label,
+                        len(classified_items),
                     )
 
-                except Exception as e:
-                    print(f"[feeds] erro ao processar feed {url}: {e}")
-                    traceback.print_exc()
+                except Exception:
+                    logger.exception("Error while processing feed %s", url)
 
         return classified_items
