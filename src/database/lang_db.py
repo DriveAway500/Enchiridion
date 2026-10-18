@@ -35,7 +35,6 @@ class LanguageDatabase:
             )
             await db.commit()
             self._initialized = True
-            print(f"[db] usando banco de dados em: {self.db_path}")
 
     async def get_language(self, guild_id, default="EN"):
         await self._ensure_init()
