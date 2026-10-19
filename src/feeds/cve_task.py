@@ -1,13 +1,3 @@
-<<<<<<< HEAD
-"""Tarefa periódica que publica novas CVEs nos canais do Discord inscritos.
-
-A cada ciclo, o módulo busca novas CVEs (via ``CVEClassifier``), filtra quais
-inscrições devem recebê-las de acordo com a severidade mínima configurada e
-envia um embed para cada canal através do webhook da inscrição. Inscrições cujo
-webhook não existe mais são removidas automaticamente do banco.
-"""
-
-=======
 """Periodic feed task.
 
 Orchestrates the whole pipeline and delivers results to Discord:
@@ -18,7 +8,6 @@ Orchestrates the whole pipeline and delivers results to Discord:
 
 from __future__ import annotations
 
->>>>>>> fd7eec0ae83fe4cc072d6f5cf5f3a62778d89f85
 import asyncio
 import logging
 from collections.abc import Callable, Coroutine, Sequence
@@ -38,25 +27,6 @@ from .engine import FeedFetcher, FeedFetchFailure, FeedSource
 
 logger = logging.getLogger(__name__)
 
-<<<<<<< HEAD
-# Limite de envios simultâneos para webhooks, evitando estourar o rate limit do Discord.
-MAX_CONCURRENT_SENDS = 20
-
-
-def _build_embed(item):
-    """Monta o embed do Discord para uma CVE.
-
-    Os textos são truncados para respeitar os limites do Discord
-    (256 caracteres no título, 4096 na descrição).
-
-    Args:
-        item: CVE já classificada, com ``title``, ``link``, ``summary``,
-            ``severity_label`` e ``color_hex``.
-
-    Returns:
-        discord.Embed: embed pronto para envio.
-    """
-=======
 MAX_CONCURRENT_SENDS: int = 20
 WEBHOOK_SEND_TIMEOUT_SECONDS: float = 10.0
 DEFAULT_FEED_URLS: tuple[str, ...] = ("https://cvefeed.io/rssfeed/latest.atom",)
@@ -121,7 +91,6 @@ class CycleStats:
 
 def _build_embed(item: VulnerabilityData) -> discord.Embed:
     """Build the Discord embed for a vulnerability."""
->>>>>>> fd7eec0ae83fe4cc072d6f5cf5f3a62778d89f85
     return discord.Embed(
         title=f"{item.severity.label} {item.title}"[:256],
         url=item.link,
@@ -130,54 +99,20 @@ def _build_embed(item: VulnerabilityData) -> discord.Embed:
     )
 
 
-<<<<<<< HEAD
-def _matches_filter(item, sub):
-    """Verifica se uma CVE deve ser enviada para uma inscrição.
-
-    Args:
-        item: CVE classificada. ``severity_score == -1.0`` indica severidade
-            desconhecida.
-        sub: inscrição com ``min_severity`` e ``allow_unknown``.
-
-    Returns:
-        bool: ``True`` se a CVE atinge a severidade mínima da inscrição, ou se a
-        severidade é desconhecida e a inscrição aceita esse caso.
-    """
-    if item.severity_score == -1.0:
-=======
 def _matches_filter(item: VulnerabilityData, sub: FeedSubscription) -> bool:
     """Check whether an item passes a subscription's severity filter."""
     score = item.severity.score
     if score is None:
->>>>>>> fd7eec0ae83fe4cc072d6f5cf5f3a62778d89f85
         return sub.allow_unknown
     return score >= sub.min_severity
 
 
-<<<<<<< HEAD
-async def _send_to_subscription(session, sub, item):
-    """Envia uma CVE para o canal da inscrição via webhook.
-
-    Nunca lança exceção: falhas são registradas no log e refletidas no retorno.
-
-    Args:
-        session: sessão HTTP (aiohttp) usada pelo webhook.
-        sub: inscrição de destino, com ``webhook_url``, ``channel_id`` e ``guild_id``.
-        item: CVE a ser enviada.
-
-    Returns:
-        tuple[bool, bool]: ``(enviado_com_sucesso, webhook_removido)``. O segundo
-        valor é ``True`` quando o Discord responde que o webhook não existe mais,
-        sinalizando que a inscrição deve ser apagada.
-    """
-=======
 async def _send_to_subscription(
     session: aiohttp.ClientSession,
     sub: FeedSubscription,
     item: VulnerabilityData,
 ) -> DeliveryStatus:
     """Send an item to a subscription's webhook."""
->>>>>>> fd7eec0ae83fe4cc072d6f5cf5f3a62778d89f85
     if not sub.webhook_url:
         return DeliveryStatus.FAILED
 
@@ -209,37 +144,9 @@ async def _send_to_subscription(
         return DeliveryStatus.FAILED
 
 
-<<<<<<< HEAD
-async def process_feeds_once(bot, classifier):
-    """Executa um ciclo completo do feed de CVEs.
-
-    Passos:
-        1. Busca e classifica as CVEs novas (ainda não enviadas).
-        2. Carrega todas as inscrições de todos os servidores.
-        3. Para cada CVE, envia em paralelo (limitado por
-           ``MAX_CONCURRENT_SENDS``) às inscrições que passam no filtro.
-        4. Remove inscrições cujo webhook sumiu e marca a CVE como enviada.
-
-    Args:
-        bot: instância do bot; precisa expor ``webhook_session``.
-        classifier: ``CVEClassifier`` responsável por buscar as CVEs.
-
-    Returns:
-        dict: estatísticas do ciclo (``items_found``, ``subscriptions``,
-        ``matched``, ``sent_ok``, ``sent_failed``).
-    """
-    stats = {
-        "items_found": 0,
-        "subscriptions": 0,
-        "matched": 0,
-        "sent_ok": 0,
-        "sent_failed": 0,
-    }
-=======
 # --------------------------------------------------------------------------- #
 # Pipeline
 # --------------------------------------------------------------------------- #
->>>>>>> fd7eec0ae83fe4cc072d6f5cf5f3a62778d89f85
 
 
 async def collect_new_items(
@@ -329,14 +236,9 @@ async def process_feeds_once(
 
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_SENDS)
 
-<<<<<<< HEAD
-    async def _send_with_limit(sub, item):
-        """Envia respeitando o limite de concorrência do semáforo."""
-=======
     async def send_with_limit(
         sub: FeedSubscription, item: VulnerabilityData
     ) -> DeliveryStatus:
->>>>>>> fd7eec0ae83fe4cc072d6f5cf5f3a62778d89f85
         async with semaphore:
             return await _send_to_subscription(session, sub, item)
 
@@ -373,24 +275,6 @@ async def process_feeds_once(
     return stats
 
 
-<<<<<<< HEAD
-def setup_feed_task(bot, interval_seconds=7200):
-    """Cria a tarefa em loop que roda ``process_feeds_once`` periodicamente.
-
-    Também anexa o classificador ao bot (``bot.feed_classifier``) para que
-    outras partes do código possam reutilizá-lo. A tarefa só começa depois que
-    o bot estiver pronto, e erros de um ciclo são logados sem derrubar o loop.
-
-    Args:
-        bot: instância do bot do Discord.
-        interval_seconds: intervalo entre ciclos, em segundos (padrão: 2 horas).
-
-    Returns:
-        discord.ext.tasks.Loop: a tarefa criada; é preciso chamar ``.start()``.
-    """
-    classifier = CVEClassifier(is_sent_checker=feed_db.is_sent)
-    bot.feed_classifier = classifier
-=======
 # --------------------------------------------------------------------------- #
 # Task setup
 # --------------------------------------------------------------------------- #
@@ -414,7 +298,6 @@ def setup_feed_task(
     fetcher = FeedFetcher(get_http_client)
     parser = CVEFeedParser()
     sources = [FeedSource(url=url) for url in feed_urls]
->>>>>>> fd7eec0ae83fe4cc072d6f5cf5f3a62778d89f85
 
     @tasks.loop(seconds=interval_seconds)
     async def feed_task() -> None:
