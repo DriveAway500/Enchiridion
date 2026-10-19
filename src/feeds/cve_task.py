@@ -19,20 +19,19 @@ from database import feed_db
 
 logger = logging.getLogger(__name__)
 
-# criação das variaveis 
+
 MAX_CONCURRENT_SENDS = 20
-SEND_TIMEOUT = 10 # tempo por envio 
+SEND_TIMEOUT = 10  # tempo por envio
 UNKNOWN_SEVERITY = -1.0
 EMBED_TITLE_LIMIT = 256
 EMBED_DESC_LIMIT = 4096
 DEFAULT_COLOR = discord.Color.light_grey()
-KIND_NEW = "new" #responsavel por dizer se a CVE e nova ou um update
+KIND_NEW = "new"  # responsavel por dizer se a CVE e nova ou um update
 KIND_UPDATE = "update"
-# fim
 
 
 def _fingerprint(item):
-    
+
     relevant = {
         "score": item.severity_score,
         "label": item.severity_label,
@@ -42,30 +41,35 @@ def _fingerprint(item):
     raw = json.dumps(relevant, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
+
 # DOCUMETATION
 # Generation a SHA-256 hash of the CVE score, label, title and summary. If any of these fields change,
 # the hash changes and the CVE is resent as an update.
 # good luck
 
-def _build_embed(item):
-    """Monta o embed do Discord para uma CVE.
 
-    Os textos são truncados para respeitar os limites do Discord
-    (256 caracteres no título, 4096 na descrição).
+def _build_embed(item, kind=KIND_NEW):
 
-    Args:
-        item: CVE já classificada, com ``title``, ``link``, ``summary``,
-            ``severity_label`` e ``color_hex``.
+    prefix = " [ATUALIZADA] " if kind == KIND_UPDATE else ""
 
-    Returns:
-        discord.Embed: embed pronto para envio.
-    """
+    try:
+        color = discord.Color(int(item.color_hex.lstrip("#"), 16))
+    except (AttributeError, ValueError):
+        color = DEFAULT_COLOR
+
     return discord.Embed(
-        title=f"{item.severity_label} {item.title}"[:256],
+        title=f"{prefix}{item.severity_label} {item.title}"[:EMBED_TITLE_LIMIT],
         url=item.link,
-        description=item.summary[:4000],
-        color=discord.Color(int(item.color_hex.lstrip("#"), 16)),
+        description=(item.summary or "")[:EMBED_DESC_LIMIT],
+        color=color,
     )
+
+
+# DOCUMETATION
+# this block build the message that appears on Discord for each CVE. It Combines the severity
+# with the CVE title and, if it an update adds [UPDATE] at the beginning, It the converts
+# the hex color to Discord format and falls back to gray if the color is invalid. Finally, it adds the CVE link
+# and  summary, truncating the title and description so they don't exceed Discord size limits.
 
 
 def _matches_filter(item, sub):
@@ -121,7 +125,10 @@ async def _send_to_subscription(session, sub, item):
         return False, True
     except discord.DiscordException:
         logger.warning(
-            "Failed to send item %s to channel %s", item.id, sub.channel_id, exc_info=True
+            "Failed to send item %s to channel %s",
+            item.id,
+            sub.channel_id,
+            exc_info=True,
         )
         return False, False
 
@@ -161,7 +168,8 @@ async def process_feeds_once(bot, classifier):
     subscriptions = await feed_db.list_subscriptions()
     stats["subscriptions"] = len(subscriptions)
     logger.info(
-        "Feed cycle: %d subscription(s) registered (across all guilds)", len(subscriptions)
+        "Feed cycle: %d subscription(s) registered (across all guilds)",
+        len(subscriptions),
     )
 
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_SENDS)
@@ -185,7 +193,9 @@ async def process_feeds_once(bot, classifier):
         if not matching_subs:
             continue
 
-        results = await asyncio.gather(*(_send_with_limit(sub, item) for sub in matching_subs))
+        results = await asyncio.gather(
+            *(_send_with_limit(sub, item) for sub in matching_subs)
+        )
 
         for sub, (ok, webhook_gone) in zip(matching_subs, results):
             if ok:
@@ -234,7 +244,9 @@ def setup_feed_task(bot, interval_seconds=7200):
     @feed_task.error
     async def feed_task_error(error):
         logger.critical(
-            "Feed task crashed: %s", error, exc_info=(type(error), error, error.__traceback__)
+            "Feed task crashed: %s",
+            error,
+            exc_info=(type(error), error, error.__traceback__),
         )
 
     return feed_task
