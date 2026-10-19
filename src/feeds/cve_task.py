@@ -127,6 +127,7 @@ async def _send_to_subscription(
         logger.warning("Timeout sending item %s to channel %s", item.id, sub.channel_id)
         return DeliveryStatus.FAILED
     except discord.NotFound:
+        # Webhook apagado no Discord: a inscrição ficou órfã.
         logger.warning(
             "Webhook for channel %s (guild %s) no longer exists - removing subscription",
             sub.channel_id,
@@ -267,6 +268,7 @@ async def process_feeds_once(
             if status is DeliveryStatus.WEBHOOK_GONE:
                 await feed_db.remove_subscription(sub.guild_id, sub.channel_id)
 
+        # Marca como enviada mesmo com falhas parciais, para não reenviar no próximo ciclo.
         await feed_db.mark_sent(item.id)
 
     logger.info("Feed cycle finished: %s", stats)
@@ -302,6 +304,7 @@ def setup_feed_task(
         try:
             await process_feeds_once(bot.webhook_session, fetcher, parser, sources)
         except Exception:
+            # Captura tudo para que um ciclo com erro não interrompa o loop.
             logger.exception("Error while processing feed cycle")
 
     @feed_task.before_loop
