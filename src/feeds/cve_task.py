@@ -17,9 +17,16 @@ from database import feed_db
 
 logger = logging.getLogger(__name__)
 
-# Limite de envios simultâneos para webhooks, evitando estourar o rate limit do Discord.
+# criação das variaveis 
 MAX_CONCURRENT_SENDS = 20
-
+SEND_TIMEOUT = 10 # tempo por envio 
+UNKNOWN_SEVERITY = -1.0
+EMBED_TITLE_LIMIT = 256
+EMBED_DESC_LIMIT = 4096
+DEFAULT_COLOR = discord.Color.light_grey()
+KIND_NEW = "new" #responsavel por dizer se a CVE e nova ou um update
+KIND_UPDATE = "update"
+# fim 
 
 def _build_embed(item):
     """Monta o embed do Discord para uma CVE.
