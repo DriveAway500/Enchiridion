@@ -6,6 +6,9 @@ __pycache__/
 #envyroment related
 .idea
 
+#logs
+logs/
+
 #databases
 *.db
 kve_sha.json
