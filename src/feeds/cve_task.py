@@ -88,7 +88,7 @@ class CycleStats:
 # Delivery
 # --------------------------------------------------------------------------- #
 
-
+# this will be moved to ui/
 def _build_embed(item: VulnerabilityData) -> discord.Embed:
     """Build the Discord embed for a vulnerability."""
     return discord.Embed(

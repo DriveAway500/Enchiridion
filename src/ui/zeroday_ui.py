@@ -163,7 +163,7 @@ class ZeroDayPanel(ui.LayoutView):
             btn_row = ui.ActionRow()
             btn_row.add_item(
                 ExploitButton(
-                    exploit_id=exploit["exploit_id"],
+                    exploit_id=str(exploit["exploit_id"]), # this convertion is happening bcs the api expects a string, but the exploit_id is an int
                     title=exploit.get("title", ""),
                     label_text=btn_view_text,
                 )
