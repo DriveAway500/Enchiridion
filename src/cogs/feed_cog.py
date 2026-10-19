@@ -25,6 +25,46 @@ class FeedConfigCog(commands.Cog):
         guild_only=True,
     )
 
+    @staticmethod
+    def _create_embed(
+        description: str,
+        color: discord.Color = discord.Color.blue(),
+        title: str | None = None,
+    ) -> discord.Embed:
+        return discord.Embed(
+            title=title,
+            description=description,
+            color=color,
+        )
+
+    async def _send_embed(
+        self,
+        interaction: discord.Interaction,
+        description: str,
+        color: discord.Color = discord.Color.blue(),
+        title: str | None = None,
+        ephemeral: bool = True,
+    ) -> None:
+        embed = self._create_embed(description=description, color=color, title=title)
+        if interaction.response.is_done():
+            await interaction.followup.send(embed=embed, ephemeral=ephemeral)
+        else:
+            await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
+
+    async def _send_chunk(
+        self,
+        interaction: discord.Interaction,
+        chunk: str,
+        is_first: bool,
+    ) -> None:
+        await self._send_embed(
+            interaction,
+            description=chunk,
+            color=discord.Color.blue(),
+            title="Feeds" if is_first else None,
+            ephemeral=True,
+        )
+
     @feeds.command(name="register", description="Registers a channel to receive vulnerability feeds.")
     @app_commands.describe(
         channel="Channel where feeds will be sent.",
@@ -54,7 +94,7 @@ class FeedConfigCog(commands.Cog):
                 "no_webhook_permission",
                 channel=channel.mention,
             )
-            await interaction.response.send_message(message, ephemeral=True)
+            await self._send_embed(interaction, message, color=discord.Color.red())
             return
         except discord.HTTPException as error:
             message = await feedcog_translate(
@@ -64,7 +104,7 @@ class FeedConfigCog(commands.Cog):
                 channel=channel.mention,
                 error=error,
             )
-            await interaction.response.send_message(message, ephemeral=True)
+            await self._send_embed(interaction, message, color=discord.Color.red())
             return
 
         await feed_db.add_subscription(
@@ -82,7 +122,7 @@ class FeedConfigCog(commands.Cog):
             channel=channel.mention,
             severity=severity.name,
         )
-        await interaction.response.send_message(message, ephemeral=True)
+        await self._send_embed(interaction, message, color=discord.Color.green())
 
     @feeds.command(name="severity", description="Changes the severity filter for an already registered channel.")
     @app_commands.describe(
@@ -107,7 +147,7 @@ class FeedConfigCog(commands.Cog):
                 "channel_not_registered",
                 channel=channel.mention,
             )
-            await interaction.response.send_message(message, ephemeral=True)
+            await self._send_embed(interaction, message, color=discord.Color.red())
             return
 
         await feed_db.update_severity_filter(
@@ -124,7 +164,7 @@ class FeedConfigCog(commands.Cog):
             channel=channel.mention,
             severity=severity.name,
         )
-        await interaction.response.send_message(message, ephemeral=True)
+        await self._send_embed(interaction, message, color=discord.Color.green())
 
     @feeds.command(name="remove", description="Removes feed registration from a channel.")
     @app_commands.describe(channel="Channel that will stop receiving feeds.")
@@ -151,7 +191,7 @@ class FeedConfigCog(commands.Cog):
             "removed",
             channel=channel.mention,
         )
-        await interaction.response.send_message(message, ephemeral=True)
+        await self._send_embed(interaction, message, color=discord.Color.green())
 
     @feeds.command(name="list", description="Lists the channels on this server registered to receive feeds.")
     @app_commands.guild_only()
@@ -160,7 +200,12 @@ class FeedConfigCog(commands.Cog):
 
         if not subscriptions:
             message = await feedcog_translate(interaction.guild_id, "errors", "no_channels_registered")
-            await interaction.response.send_message(message, ephemeral=True)
+            await self._send_embed(
+                interaction,
+                f"ℹ️ {message}",
+                color=discord.Color.blue(),
+                title="Feeds",
+            )
             return
 
         lines = []
