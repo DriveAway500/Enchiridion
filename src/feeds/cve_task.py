@@ -8,6 +8,8 @@ webhook não existe mais são removidas automaticamente do banco.
 
 import asyncio
 import logging
+import json
+import hashlib
 
 import discord
 from discord.ext import tasks
@@ -26,7 +28,24 @@ EMBED_DESC_LIMIT = 4096
 DEFAULT_COLOR = discord.Color.light_grey()
 KIND_NEW = "new" #responsavel por dizer se a CVE e nova ou um update
 KIND_UPDATE = "update"
-# fim 
+# fim
+
+
+def _fingerprint(item):
+    
+    relevant = {
+        "score": item.severity_score,
+        "label": item.severity_label,
+        "title": item.title,
+        "summary": " ".join((item.summary or "").split()),
+    }
+    raw = json.dumps(relevant, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+# DOCUMETATION
+# Generation a SHA-256 hash of the CVE score, label, title and summary. If any of these fields change,
+# the hash changes and the CVE is resent as an update.
+# good luck
 
 def _build_embed(item):
     """Monta o embed do Discord para uma CVE.
